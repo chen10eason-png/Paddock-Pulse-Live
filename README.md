@@ -1,22 +1,14 @@
-# Paddock Pulse Live Race PoC V0.1
+# Paddock Pulse Live Race PoC V0.2
 
-目的：先獨立驗證免費 F1 Live Timing，再整合正式 Paddock Pulse。
+資料可靠性修正版。
 
-## 資料
-- Formula 1 live timing SignalR feed
-- TimingData / TimingAppData / DriverList
-- LapCount / TrackStatus / WeatherData / RaceControlMessages
-- 不使用付費 OpenF1
-- 不處理 F1 TV 影片
+- LIVE：Session 正在進行且 TimingData 30 秒內更新
+- FINAL：Session 已 Finalised/Finished/Ended，或 ArchiveStatus Complete
+- STALE：已有資料但不能確認仍為即時
+- CONNECTING：已連線但尚未取得可判斷的 TimingData
+- OFFLINE：F1 SignalR 未連線
+- DEMO：只有 `/api/live?demo=1` 才啟用
+- 過濾 SignalR `_kf` metadata，避免假車手
+- 分離 `lastMessageAt` 與 `lastTimingAt`
 
-## 執行
-1. 安裝 Node.js 18+
-2. `npm install`
-3. `npm start`
-4. 瀏覽 `http://localhost:3000`
-
-沒有 live session 時，`/api/live` 自動回傳 DEMO 資料，方便測 UI。
-強制 Demo：`http://localhost:3000/?demo=1`
-
-## 正式整合原則
-這個 PoC 不會取代目前 Paddock Pulse。先驗證一場真正 session 的穩定性，再把 Live 卡片/頁面併入 PWA。
+Render 設定維持：Build `npm install`；Start `npm start`。
