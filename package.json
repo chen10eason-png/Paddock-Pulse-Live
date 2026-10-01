@@ -1,6 +1,6 @@
 {
   "name": "paddock-pulse-live-race-poc",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {"start": "node server.js"},
   "dependencies": {"cors": "^2.8.5", "express": "^4.21.2", "ws": "^8.18.0"}
