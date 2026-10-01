@@ -1,9 +1,184 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#090b10"><title>Paddock Pulse Live</title><style>
-:root{color-scheme:dark;--bg:#090b10;--panel:#11151d;--panel2:#151a23;--muted:#8c95a6;--line:#242a35;--text:#f5f7fb;--accent:#ff3b30;--good:#22c55e;--warn:#f59e0b;--blue:#4da3ff}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -20%,#1b2230 0,#090b10 42%);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;padding:env(safe-area-inset-top) 12px calc(24px + env(safe-area-inset-bottom));min-height:100vh}.wrap{max-width:760px;margin:auto}.top{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 4px 12px}.brand{font-weight:900;letter-spacing:-.04em;font-size:24px}.sub{font-size:12px;color:var(--muted);margin-top:3px}.badge{padding:7px 10px;border-radius:999px;font-size:12px;font-weight:800;background:#202631;color:#d9dee8}.badge.live{background:#401316;color:#ff726b}.badge.final{background:#1c2834;color:#9fd0ff}.badge.stale{background:#3a2a0f;color:#ffd27c}.badge.offline{background:#2a2b31;color:#aaa}.hero{background:linear-gradient(180deg,#171c25,#10141b);border:1px solid #242a35;border-radius:22px;padding:18px;box-shadow:0 14px 40px rgba(0,0,0,.28)}.event{font-size:22px;font-weight:850;letter-spacing:-.03em}.meta{margin-top:5px;color:var(--muted);font-size:13px}.laprow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}.metric{background:#0d1016;border:1px solid #202631;border-radius:16px;padding:13px}.metric b{display:block;font-size:22px;margin-top:4px}.label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}.tiny{background:#0d1016;border:1px solid #202631;border-radius:14px;padding:10px}.tiny b{font-size:14px;display:block;margin-top:4px}.section{margin-top:18px}.section h2{font-size:14px;letter-spacing:.02em;margin:0 0 9px;color:#c9cfda}.drivers{display:flex;flex-direction:column;gap:7px}.driver{display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:11px 12px}.pos{font-weight:900;font-size:18px}.name{font-weight:800}.team{font-size:11px;color:var(--muted);margin-top:2px}.right{text-align:right}.gap{font-weight:750;font-size:13px}.detail{font-size:11px;color:var(--muted);margin-top:3px}.compound{display:inline-flex;align-items:center;gap:6px}.dot{width:8px;height:8px;border-radius:50%;background:#aaa}.soft{background:#ff4242}.medium{background:#ffd34e}.hard{background:#e9edf2}.inter{background:#5ebdff}.wet{background:#4d7cff}.pit{color:#ffd27c;font-weight:800}.rc{display:flex;flex-direction:column;gap:8px}.msg{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 12px}.msg .m1{font-size:12px;font-weight:800}.msg .m2{font-size:12px;color:#c9cfda;margin-top:4px;line-height:1.4}.footer{margin:18px 0 4px;text-align:center;color:#697284;font-size:11px}.empty{padding:22px;text-align:center;color:var(--muted);background:var(--panel);border-radius:16px;border:1px solid var(--line)}@media(max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.event{font-size:20px}.driver{grid-template-columns:30px 1fr auto}}
-</style></head><body><main class="wrap"><div class="top"><div><div class="brand">Paddock Pulse Live</div><div class="sub">F1 Live Timing · V0.3</div></div><div id="status" class="badge">CONNECTING</div></div><section class="hero"><div id="event" class="event">等待 F1 Timing…</div><div id="meta" class="meta">正在連線</div><div class="laprow"><div class="metric"><span class="label">LAP</span><b id="lap">—</b></div><div class="metric"><span class="label">TRACK</span><b id="track">—</b></div></div><div class="grid"><div class="tiny"><span class="label">AIR</span><b id="air">—</b></div><div class="tiny"><span class="label">TRACK TEMP</span><b id="ttrack">—</b></div><div class="tiny"><span class="label">HUMIDITY</span><b id="hum">—</b></div><div class="tiny"><span class="label">WIND</span><b id="wind">—</b></div></div></section><section class="section"><h2>順位</h2><div id="drivers" class="drivers"><div class="empty">等待資料…</div></div></section><section class="section"><h2>Race Control</h2><div id="rc" class="rc"><div class="empty">目前沒有訊息</div></div></section><div id="updated" class="footer">—</div></main><script>
-const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-function badge(status){const el=$('status');el.textContent=status;el.className='badge '+String(status).toLowerCase()}
-function tyre(c){c=String(c||'').toLowerCase();return `<span class="compound"><span class="dot ${c}"></span>${esc(c?c.toUpperCase():'—')}</span>`}
-function render(d){badge(d.status||'OFFLINE');const m=d.session?.Meeting||{};$('event').textContent=m.Name||'F1 Live Timing';$('meta').textContent=[m.Location,d.session?.Name,d.session?.SessionStatus].filter(Boolean).join(' · ')||'等待 session';$('lap').textContent=(d.lap?.CurrentLap||'—')+' / '+(d.lap?.TotalLaps||'—');$('track').textContent=d.track?.Message||d.track?.Status||'—';$('air').textContent=d.weather?.AirTemp?d.weather.AirTemp+'°C':'—';$('ttrack').textContent=d.weather?.TrackTemp?d.weather.TrackTemp+'°C':'—';$('hum').textContent=d.weather?.Humidity?d.weather.Humidity+'%':'—';$('wind').textContent=d.weather?.WindSpeed?d.weather.WindSpeed+' m/s':'—';const rows=(d.drivers||[]).map(x=>`<div class="driver"><div class="pos">${esc(x.position)}</div><div><div class="name">${esc(x.tla||x.name||x.number)}</div><div class="team">${esc(x.team)} · #${esc(x.number)} · ${tyre(x.compound)} ${x.tyreLaps!=null?esc(x.tyreLaps)+'L':''}</div></div><div class="right"><div class="gap">${x.inPit?'<span class="pit">PIT</span>':esc(x.gap||'LEADER')}</div><div class="detail">${x.interval?esc(x.interval)+' · ':''}${x.lastLap?esc(x.lastLap):''}</div></div></div>`).join('');$('drivers').innerHTML=rows||'<div class="empty">目前沒有車手資料</div>';const msgs=(d.raceControl||[]).slice(0,12).map(x=>`<div class="msg"><div class="m1">${esc(x.Flag||x.Category||'Race Control')} ${x.Lap?'· Lap '+esc(x.Lap):''}</div><div class="m2">${esc(x.Message||'')}</div></div>`).join('');$('rc').innerHTML=msgs||'<div class="empty">目前沒有 Race Control 訊息</div>';$('updated').textContent='最後資料更新：'+(d.lastTimingAt?new Date(d.lastTimingAt).toLocaleString('zh-TW'):'—')}
-async function load(){try{const r=await fetch('/api/live',{cache:'no-store'});if(!r.ok)throw Error(r.status);render(await r.json())}catch(e){badge('OFFLINE');$('meta').textContent='無法取得 Live API'}}load();setInterval(load,2000);
-</script></body></html>
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080a0f">
+<title>Paddock Pulse Live</title>
+<style>
+:root{
+  color-scheme:dark;--bg:#080a0f;--panel:#11151d;--panel2:#151a23;--muted:#8c95a6;--line:#242a35;
+  --text:#f5f7fb;--red:#ff453a;--green:#30d158;--amber:#ffd60a;--blue:#64d2ff;--purple:#bf5af2
+}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% -15%,#1b2330 0,#0b0e14 38%,#080a0f 66%);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;padding:env(safe-area-inset-top) 12px calc(24px + env(safe-area-inset-bottom))}
+button{font:inherit}
+.wrap{max-width:780px;margin:auto}
+.top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:18px 4px 12px}
+.brand{font-weight:900;letter-spacing:-.045em;font-size:24px}
+.sub{font-size:12px;color:var(--muted);margin-top:3px}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;font-size:12px;font-weight:850;background:#202631;color:#d9dee8;border:1px solid rgba(255,255,255,.04)}
+.badge.live{background:#421518;color:#ff817a}.badge.live:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 5px rgba(255,69,58,.12)}
+.badge.final{background:#172737;color:#a7d8ff}.badge.stale{background:#37290f;color:#ffd27c}.badge.offline{background:#28292e;color:#aaa}.badge.connecting{background:#202631}.badge.demo{background:#2d2138;color:#dab7ff}
+.hero{background:linear-gradient(180deg,rgba(24,30,41,.96),rgba(15,19,26,.96));border:1px solid #252b37;border-radius:23px;padding:18px;box-shadow:0 14px 40px rgba(0,0,0,.28)}
+.event{font-size:22px;font-weight:900;letter-spacing:-.035em}
+.meta{margin-top:5px;color:var(--muted);font-size:13px}
+.laprow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.metric{background:#0c1016;border:1px solid #202631;border-radius:16px;padding:13px}
+.metric b{display:block;font-size:22px;margin-top:4px}
+.label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:800}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.tiny{background:#0c1016;border:1px solid #202631;border-radius:14px;padding:10px}.tiny b{font-size:14px;display:block;margin-top:4px}
+.section{margin-top:18px}.sectionHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}.section h2{font-size:14px;letter-spacing:.02em;margin:0;color:#c9cfda}
+.segmented{display:flex;padding:3px;background:#11151d;border:1px solid #242a35;border-radius:11px;gap:2px}.segmented button{border:0;background:transparent;color:#7f8999;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:800}.segmented button.active{background:#252b36;color:#fff}
+.drivers{display:flex;flex-direction:column;gap:7px}
+.driver{position:relative;overflow:hidden;display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:10px;background:linear-gradient(180deg,#12161e,#10141b);border:1px solid var(--line);border-radius:15px;padding:11px 12px 11px 15px}
+.driver:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--team,#777)}
+.driver.podium{background:linear-gradient(180deg,#171b23,#11151d)}
+.driver.fastest{box-shadow:inset 0 0 0 1px rgba(191,90,242,.48)}
+.pos{font-weight:950;font-size:18px;letter-spacing:-.03em}.pos.medal{font-size:20px}
+.nameLine{display:flex;align-items:center;gap:7px;min-width:0}.name{font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.num{font-size:10px;color:#6f7888}.team{font-size:11px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.right{text-align:right;min-width:78px}.gap{font-weight:820;font-size:13px}.detail{font-size:10px;color:var(--muted);margin-top:4px}
+.compound{display:inline-flex;align-items:center;gap:5px}.dot{width:8px;height:8px;border-radius:50%;background:#aaa}.soft{background:#ff4242}.medium{background:#ffd34e}.hard{background:#e9edf2}.inter{background:#5ebdff}.wet{background:#4d7cff}
+.pill{display:inline-flex;align-items:center;border-radius:7px;padding:2px 5px;font-size:9px;font-weight:900;letter-spacing:.04em}.pit{background:#4b370c;color:#ffd76b}.out{background:#123c2a;color:#7df0b0}.fast{background:#321a42;color:#d9a0ff}
+.rc{display:flex;flex-direction:column;gap:8px}.msg{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 12px 11px 15px;overflow:hidden}.msg:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#687386}.msg.yellow:before{background:#ffd60a}.msg.red:before{background:#ff453a}.msg.green:before,.msg.clear:before{background:#30d158}.msg.blue:before{background:#64d2ff}.msg.sc:before{background:#ffd60a}.msg.penalty:before{background:#ff9f0a}.msg .m1{font-size:11px;font-weight:900;letter-spacing:.03em}.msg .m2{font-size:12px;color:#c9cfda;margin-top:4px;line-height:1.4}
+.footer{margin:18px 0 4px;text-align:center;color:#697284;font-size:11px}.empty{padding:22px;text-align:center;color:var(--muted);background:var(--panel);border-radius:16px;border:1px solid var(--line)}
+@media(max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.event{font-size:20px}.driver{grid-template-columns:30px minmax(0,1fr) auto}.right{min-width:72px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="top">
+    <div><div class="brand">Paddock Pulse Live</div><div class="sub">F1 Live Timing · V0.4</div></div>
+    <div id="status" class="badge connecting">CONNECTING</div>
+  </div>
+
+  <section class="hero">
+    <div id="event" class="event">等待 F1 Timing…</div>
+    <div id="meta" class="meta">正在連線</div>
+    <div class="laprow">
+      <div class="metric"><span class="label">LAP</span><b id="lap">—</b></div>
+      <div class="metric"><span class="label">TRACK</span><b id="track">—</b></div>
+    </div>
+    <div class="grid">
+      <div class="tiny"><span class="label">AIR</span><b id="air">—</b></div>
+      <div class="tiny"><span class="label">TRACK TEMP</span><b id="ttrack">—</b></div>
+      <div class="tiny"><span class="label">HUMIDITY</span><b id="hum">—</b></div>
+      <div class="tiny"><span class="label">WIND</span><b id="wind">—</b></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="sectionHead">
+      <h2>Timing Tower</h2>
+      <div class="segmented" id="gapToggle">
+        <button type="button" data-mode="gap" class="active">GAP</button>
+        <button type="button" data-mode="interval">INTERVAL</button>
+      </div>
+    </div>
+    <div id="drivers" class="drivers"><div class="empty">等待資料…</div></div>
+  </section>
+
+  <section class="section">
+    <div class="sectionHead"><h2>Race Control</h2></div>
+    <div id="rc" class="rc"><div class="empty">目前沒有訊息</div></div>
+  </section>
+
+  <div id="updated" class="footer">—</div>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+let latest=null, gapMode='gap';
+
+function badge(status){
+  const el=$('status'),s=String(status||'OFFLINE').toUpperCase();
+  el.textContent=s;el.className='badge '+s.toLowerCase()
+}
+function tyre(c){
+  c=String(c||'').toLowerCase();
+  return `<span class="compound"><span class="dot ${c}"></span>${esc(c?c.toUpperCase():'—')}</span>`
+}
+function lapSeconds(s){
+  if(!s)return Infinity;
+  const p=String(s).split(':');
+  if(p.length===2)return Number(p[0])*60+Number(p[1]);
+  return Number(s)||Infinity
+}
+function fastestNumber(drivers){
+  let best=null,bestSec=Infinity;
+  for(const d of drivers||[]){const t=lapSeconds(d.bestLap);if(t<bestSec){bestSec=t;best=d.number}}
+  return best
+}
+function podiumLabel(p){return p===1?'①':p===2?'②':p===3?'③':esc(p)}
+function teamColor(v){const s=String(v||'777777').replace(/[^0-9a-f]/gi,'').slice(0,6);return '#'+(s.length===6?s:'777777')}
+function rcClass(x){
+  const txt=((x.Flag||'')+' '+(x.Category||'')+' '+(x.Message||'')).toLowerCase();
+  if(txt.includes('red flag'))return'red';
+  if(txt.includes('yellow'))return'yellow';
+  if(txt.includes('green'))return'green';
+  if(txt.includes('clear'))return'clear';
+  if(txt.includes('blue'))return'blue';
+  if(txt.includes('safety car')||txt.includes('virtual safety car')||txt.includes('vsc'))return'sc';
+  if(txt.includes('penalty')||txt.includes('investigat'))return'penalty';
+  return''
+}
+function render(d){
+  latest=d;badge(d.status);
+  const m=d.session?.Meeting||{};
+  $('event').textContent=m.Name||'F1 Live Timing';
+  $('meta').textContent=[m.Location,d.session?.Name,d.session?.SessionStatus].filter(Boolean).join(' · ')||'等待 session';
+  $('lap').textContent=(d.lap?.CurrentLap||'—')+' / '+(d.lap?.TotalLaps||'—');
+  $('track').textContent=d.track?.Message||d.track?.Status||'—';
+  $('air').textContent=d.weather?.AirTemp?d.weather.AirTemp+'°C':'—';
+  $('ttrack').textContent=d.weather?.TrackTemp?d.weather.TrackTemp+'°C':'—';
+  $('hum').textContent=d.weather?.Humidity?d.weather.Humidity+'%':'—';
+  $('wind').textContent=d.weather?.WindSpeed?d.weather.WindSpeed+' m/s':'—';
+
+  const drivers=d.drivers||[], fastest=fastestNumber(drivers);
+  const rows=drivers.map(x=>{
+    const value=gapMode==='interval'?(x.position===1?'LEADER':x.interval||'—'):(x.position===1?'LEADER':x.gap||'—');
+    const pit=x.inPit?'<span class="pill pit">PIT</span>':x.pitOut?'<span class="pill out">OUT</span>':'';
+    const fast=String(x.number)===String(fastest)&&x.bestLap?'<span class="pill fast">FASTEST</span>':'';
+    return `<div class="driver ${x.position<=3?'podium ':''}${String(x.number)===String(fastest)?'fastest':''}" style="--team:${teamColor(x.teamColour)}">
+      <div class="pos ${x.position<=3?'medal':''}">${podiumLabel(x.position)}</div>
+      <div>
+        <div class="nameLine"><div class="name">${esc(x.tla||x.name||x.number)}</div><span class="num">#${esc(x.number)}</span>${pit}${fast}</div>
+        <div class="team">${esc(x.team)} · ${tyre(x.compound)} ${x.tyreLaps!=null?esc(x.tyreLaps)+'L':''}${x.pitStops!=null?' · '+esc(x.pitStops)+' STOP':''}</div>
+      </div>
+      <div class="right">
+        <div class="gap">${esc(value)}</div>
+        <div class="detail">${x.lastLap?'LAST '+esc(x.lastLap):'LAST —'}${x.bestLap?' · BEST '+esc(x.bestLap):''}</div>
+      </div>
+    </div>`
+  }).join('');
+  $('drivers').innerHTML=rows||'<div class="empty">目前沒有車手資料</div>';
+
+  const msgs=(d.raceControl||[]).slice(0,14).map(x=>`<div class="msg ${rcClass(x)}">
+    <div class="m1">${esc(x.Flag||x.Category||'Race Control')}${x.Lap?' · LAP '+esc(x.Lap):''}</div>
+    <div class="m2">${esc(x.Message||'')}</div>
+  </div>`).join('');
+  $('rc').innerHTML=msgs||'<div class="empty">目前沒有 Race Control 訊息</div>';
+
+  $('updated').textContent='最後 Timing 更新：'+(d.lastTimingAt?new Date(d.lastTimingAt).toLocaleString('zh-TW'):'—');
+}
+document.querySelectorAll('#gapToggle button').forEach(btn=>btn.addEventListener('click',()=>{
+  gapMode=btn.dataset.mode;
+  document.querySelectorAll('#gapToggle button').forEach(b=>b.classList.toggle('active',b===btn));
+  if(latest)render(latest)
+}));
+async function load(){
+  try{
+    const r=await fetch('/api/live',{cache:'no-store'});
+    if(!r.ok)throw Error(r.status);
+    render(await r.json())
+  }catch(e){
+    badge('OFFLINE');$('meta').textContent='無法取得 Live API'
+  }
+}
+load();setInterval(load,2000);
+</script>
+</body>
+</html>
