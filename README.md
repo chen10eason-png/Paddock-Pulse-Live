@@ -1,11 +1,9 @@
-# Paddock Pulse Live Race PoC V0.6
+# Paddock Pulse Live Race PoC V0.6.1
 
-V0.6 = Live + Results Archive。
+Session-aware Timing Tower。
 
-- 有正在進行中的 session：顯示 SignalR LIVE
-- 沒有 live session：自動改顯示 F1 Live Timing Archive 最近完成的 session
-- 歷史結果：可切換 2026 各站與 Practice / Qualifying / Sprint / Race
-- Archive 直接讀官方 `livetiming.formula1.com/static/2026/Index.json`
-- 每個 session 讀取官方 keyframe：SessionInfo / TimingData / TimingAppData / DriverList / WeatherData / RaceControlMessages / LapCount / TrackStatus / ExtrapolatedClock
-- Archive proxy 由 Render backend 負責，避免前端 CORS / 403 問題
-- 缺資料顯示 `—`，不自行猜測
+- FP1 / FP2 / FP3：顯示 Position / Best Lap / Gap to Fastest / Gap to car ahead / Laps
+- Qualifying / Sprint Qualifying：顯示 Best Lap / Gap to P1，若 F1 feed 提供 `BestLapTimes` 則列出 Q1 / Q2 / Q3
+- Race / Sprint：維持 Race Gap / Interval / Last Lap / Best Lap
+- Practice / Qualifying 的 GAP 優先使用 F1 `Stats.TimeDiffToFastest`；沒有時才由 Best Lap 數學計算
+- 不猜測缺失圈速；無資料顯示 `—`
