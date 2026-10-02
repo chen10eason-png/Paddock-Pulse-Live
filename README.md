@@ -1,11 +1,11 @@
-# Paddock Pulse Live Race PoC V0.5
+# Paddock Pulse Live Race PoC V0.6
 
-V0.5 聚焦 Live 穩定性與賽事可讀性。
+V0.6 = Live + Results Archive。
 
-- 新增 ExtrapolatedClock / SessionStatus 訂閱
-- 顯示 Session Clock
-- SC / VSC / Red / Yellow / Green 醒目提示
-- Timing age
-- Retired → DNF；Stopped → STOP
-- 保留 GAP / INTERVAL、最快圈、PIT、Race Control
-- 不自行猜測缺少資料
+- 有正在進行中的 session：顯示 SignalR LIVE
+- 沒有 live session：自動改顯示 F1 Live Timing Archive 最近完成的 session
+- 歷史結果：可切換 2026 各站與 Practice / Qualifying / Sprint / Race
+- Archive 直接讀官方 `livetiming.formula1.com/static/2026/Index.json`
+- 每個 session 讀取官方 keyframe：SessionInfo / TimingData / TimingAppData / DriverList / WeatherData / RaceControlMessages / LapCount / TrackStatus / ExtrapolatedClock
+- Archive proxy 由 Render backend 負責，避免前端 CORS / 403 問題
+- 缺資料顯示 `—`，不自行猜測
