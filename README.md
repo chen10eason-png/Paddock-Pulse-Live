@@ -1,22 +1,31 @@
-# Paddock Pulse Live V0.6.2 — Stable Live Refresh
+# Paddock Pulse Live V0.6.3 — Qualifying Continuity
 
-這版針對 FP3 實機測試修正「畫面要手動刷新才看到新的個人最快圈／Session 剩餘時間不動」。
+依實機排位賽測試修正兩個問題：
 
-## 更新
-- LIVE 時採約 5 秒輪詢，不追求 1–2 秒，優先穩定
-- request 尚未回來時不重疊第二個 request
-- 每次 request 有 7 秒 timeout，避免 Safari / Render request 卡住
-- 使用遞迴 `setTimeout`，不使用會疊 request 的固定 `setInterval`
-- 新的個人 Best Lap 會在下一次成功輪詢後自動更新
-- FASTEST 標記與 GAP to Fastest 每次 render 都重新計算
-- 個人最快圈更新時該列會短暫亮一下
-- Session Clock 每秒顯示更新；只有 F1 feed 明確 `Extrapolating=true` 時才本地倒數
-- STALE 但 TimingData 仍在 90 秒內時保留 live 畫面，避免瞬間跳回 Archive
-- 非 LIVE 狀態降至約 20 秒檢查，減少 Render Free 負擔
-- History / Archive 模式不做高頻刷新
+1. Session Clock 不會持續倒數／會跳回舊時間。
+2. Q1→Q2、Q2→Q3 的空檔會錯誤切回上一個 Archive（例如 FP3）。
+
+## Session Clock
+- 仍每秒更新畫面。
+- F1 API 每 5 秒回傳相同 Remaining 時，不再重新把倒數基準設回原值。
+- 只在 F1 feed 的 Remaining 真正變更、Session 改變或階段重設時重新校準。
+- Practice / Qualifying / Race 的 live session 會本地連續倒數。
+- FINAL / Finished 不繼續倒數。
+
+## Qualifying continuity
+- Q1/Q2/Q3 間隔期間保留目前 Qualifying live snapshot。
+- 不會因短暫 STALE / 非 LIVE 就退回 FP3。
+- Archive 只有在追上同一 Session，或 live session 已可安全結束時才接管。
+- 畫面新增 Q1 / Q2 / Q3（Sprint Qualifying 則 SQ1 / SQ2 / SQ3）標示。
+- 階段只使用 F1 feed 的 BestLapTimes 判斷；空檔維持上一階段，等下一階段真的有資料再切換。
+
+## 保留 V0.6.2
+- LIVE 約 5 秒輪詢
+- request 防重疊
+- 7 秒 timeout
+- Best Lap / FASTEST / GAP 自動更新
 
 ## 上傳
-覆蓋：
-`public/index.html`
+只需覆蓋：`public/index.html`
 
-後端 `server.js` 不必修改；V0.6.2 使用既有 V0.6.1 API contract。
+`server.js` 不必修改。
