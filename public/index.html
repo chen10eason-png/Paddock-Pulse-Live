@@ -11,9 +11,14 @@
 .metric.track-warning b{color:#ffd24a}
 .metric.track-red{border-color:#74282d;background:#241114}
 .metric.track-red b{color:#ff5f68}
+.pit{color:#ffd24a!important;font-weight:950;letter-spacing:.04em}
+.cheq{display:inline-flex;align-items:center;justify-content:center;margin-left:6px;
+  width:20px;height:20px;border-radius:6px;font-size:12px;
+  background:linear-gradient(45deg,#fff 25%,#141820 25%,#141820 50%,#fff 50%,#fff 75%,#141820 75%);
+  background-size:8px 8px;border:1px solid #ffffff55}
 @keyframes flash{0%{background:#252b38}100%{background:#11151d}}@media(max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.metrics{grid-template-columns:1fr 1fr}.metric.clock{grid-column:1/-1}.driver{grid-template-columns:30px minmax(0,1fr) auto}.right{min-width:96px}.selects{grid-template-columns:1fr}}
 </style></head><body><main class="wrap">
-<div class="top"><div><div class="brand">Paddock Pulse Live</div><div class="sub">Race Visual & Clock Fix · V0.6.4</div></div><div id="status" class="badge">LOADING</div></div>
+<div class="top"><div><div class="brand">Paddock Pulse Live</div><div class="sub">Driver Chequered · V0.6.5</div></div><div id="status" class="badge">LOADING</div></div>
 <div class="mode"><button id="latestBtn" class="active">最新狀態</button><button id="historyBtn">歷史結果</button></div>
 <div id="historyPanel" class="historyPanel"><div class="selects"><select id="meetingSel"><option>載入賽事…</option></select><select id="sessionSel"><option>選擇 Session</option></select></div></div>
 <section class="hero"><div id="eyebrow" class="eyebrow">LOADING</div><div id="event" class="event">等待資料…</div><div id="meta" class="meta">正在取得最新 session</div><div class="metrics"><div class="metric"><span class="label">LAP</span><b id="lap">—</b></div><div class="metric" id="trackMetric"><span class="label">TRACK</span><b id="track">—</b></div><div class="metric clock"><span class="label">SESSION CLOCK</span><b id="clock">—</b></div></div><div class="grid"><div class="tiny"><span class="label">AIR</span><b id="air">—</b></div><div class="tiny"><span class="label">TRACK TEMP</span><b id="ttrack">—</b></div><div class="tiny"><span class="label">HUMIDITY</span><b id="hum">—</b></div><div class="tiny"><span class="label">WIND</span><b id="wind">—</b></div></div></section>
@@ -44,6 +49,26 @@ function tyreClass(compound){
   if(c==='INTERMEDIATE')return'intermediate';
   if(c==='WET')return'wet';
   return'';
+}
+
+function sessionEnded(d){
+  const status=String(d?.status||'').toUpperCase();
+  const ss=String(d?.sessionStatus||d?.session?.SessionStatus||'').toLowerCase();
+  return d?.source==='archive'||status==='FINAL'||status==='RESULT'||
+    ['finished','finalised','ended'].includes(ss);
+}
+function displayedCompound(d,x){
+  const kind=sessionKind(d);
+  if(kind==='practice'||kind==='qualifying'){
+    return sessionEnded(d) ? (x.bestLapCompound||'') : (x.compound||'');
+  }
+  return x.compound||'';
+}
+function tyreMarkup(d,x){
+  const compound=displayedCompound(d,x);
+  if(!compound)return'';
+  const prefix=(sessionKind(d)==='practice'||sessionKind(d)==='qualifying')&&sessionEnded(d)?'BEST ':'';
+  return ' · <span class="tyre '+tyreClass(compound)+'">'+prefix+esc(compound)+'</span>';
 }
 function trackState(d){
   const code=String(d.track?.Status??'').trim();
@@ -196,9 +221,11 @@ function render(d){
      if(kind==='qualifying'&&q.length)extra=`<div class="qparts">${q.map((v,i)=>'Q'+(i+1)+' '+esc(v)).join(' · ')}</div>`;
    }else{
      const v=gapMode==='interval'?(x.position===1?'LEADER':x.interval||'—'):(x.position===1?'LEADER':x.gap||'—');
-     right=`<div class="gap">${esc(v)}</div><div class="detail">${x.lastLap?'LAST '+esc(x.lastLap):'LAST —'}${x.bestLap?' · BEST '+esc(x.bestLap):''}</div>`;
+     right=x.inPit
+       ? `<div class="gap pit">IN PIT</div><div class="detail">${x.lastLap?'LAST '+esc(x.lastLap):'LAST —'}${x.bestLap?' · BEST '+esc(x.bestLap):''}</div>`
+       : `<div class="gap">${esc(v)}</div><div class="detail">${x.lastLap?'LAST '+esc(x.lastLap):'LAST —'}${x.bestLap?' · BEST '+esc(x.bestLap):''}</div>`;
    }
-   return `<div class="driver ${x.retired?'retired ':''}${String(x.number)===String(best.number)&&x.bestLap?'fastest ':''}${changed.has(String(x.number))?'flash':''}" style="--team:#${esc(x.teamColour||'777777')}"><div class="pos">${esc(x.position)}</div><div><div class="name">${esc(x.tla||x.name||x.number)} #${esc(x.number)}${state}${fast}</div><div class="team">${esc(x.team)}${sessionAware&&x.laps!=null?' · '+esc(x.laps)+' LAPS':''}${!sessionAware&&x.compound?' · <span class="tyre '+tyreClass(x.compound)+'">'+esc(x.compound)+'</span>':''}</div>${extra}</div><div class="right">${right}</div></div>`
+   return `<div class="driver ${x.retired?'retired ':''}${String(x.number)===String(best.number)&&x.bestLap?'fastest ':''}${changed.has(String(x.number))?'flash':''}" style="--team:#${esc(x.teamColour||'777777')}"><div class="pos">${esc(x.position)}</div><div><div class="name">${esc(x.tla||x.name||x.number)} #${esc(x.number)}${x.chequered?'<span class="cheq" title="Chequered">🏁</span>':''}${state}${fast}</div><div class="team">${esc(x.team)}${sessionAware&&x.laps!=null?' · '+esc(x.laps)+' LAPS':''}${tyreMarkup(d,x)}</div>${extra}</div><div class="right">${right}</div></div>`
  }).join('')||'<div class="empty">目前沒有車手資料</div>';
  $('rc').innerHTML=(d.raceControl||[]).slice(0,14).map(x=>`<div class="msg"><strong>${esc(x.Flag||x.Category||'Race Control')}${x.Lap?' · LAP '+esc(x.Lap):''}</strong><div class="detail">${esc(x.Message||'')}</div></div>`).join('')||'<div class="empty">目前沒有 Race Control 訊息</div>';
  $('updated').textContent=d.source==='archive'?'資料來源：F1 Live Timing Archive':'最後 Live Timing 更新：'+(d.lastTimingAt?new Date(d.lastTimingAt).toLocaleString('zh-TW'):'—')
@@ -219,9 +246,9 @@ function liveStillUsable(d){
   if(d.status==='LIVE')return true;
   if(!Array.isArray(d.drivers)||!d.drivers.length)return false;
   const kind=sessionKind(d);
-  if((kind==='qualifying'||kind==='practice')&&!archiveComplete(d)){
+  if(kind==='qualifying'||kind==='practice'){
     const age=Date.now()-Date.parse(d.lastMessageAt||d.lastTimingAt||0);
-    if(Number.isFinite(age)&&age<15*60*1000)return true;
+    if(Number.isFinite(age)&&age<30*60*1000)return true;
   }
   if(d.status==='STALE'&&d.lastTimingAt){
     const age=Date.now()-Date.parse(d.lastTimingAt);
