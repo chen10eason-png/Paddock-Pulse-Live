@@ -1,41 +1,47 @@
-# Paddock Pulse Live V0.6.4 — Race Visual & Clock Fix
+# Paddock Pulse Live V0.6.5 — Driver Chequered
 
-依 2026/10/04 正賽實機測試修正。
+這是 V0.6.5 的更正版；未使用先前「TRACK 全場方格旗」設計。
 
-## 1. 輪胎顏色
-正賽 Timing Tower 的英文 compound 依標準顏色顯示：
-- SOFT：紅
-- MEDIUM：黃
-- HARD：白
-- INTERMEDIATE：綠
-- WET：藍
+## FP / Qualifying 輪胎
+- LIVE：顯示車手當下使用的 compound。
+- Session 結束：顯示該車手跑出個人最快圈時使用的 compound。
+- Server 在 Best Lap 更新時記錄當下 tyre compound。
+- 無法確認就不猜。
 
-## 2. Track 狀態
-- SC：黃色
-- VSC：黃色
-- VSC ENDING：黃色
-- YELLOW：黃色
-- RED FLAG：紅色
+## Race — IN PIT
+- 正賽 `InPit=true` 時，GAP / INTERVAL 主位置改成 `IN PIT`。
+- 出 pit 後恢復差距。
+- Last Lap / Best Lap 保留。
 
-顏色套在 TRACK 卡片本身，不只改文字。
+## 方格旗：每位車手個別顯示
+方格旗不再放在 TRACK 卡。
 
-## 3. Session Clock refresh / reopen
-V0.6.3 在頁面刷新或關掉重開後，會重新以舊的 Remaining 當作新的起點。
+### FP / Qualifying
+- Session 時間到 00:00 後進入 finish phase。
+- 還在最後一圈的車手先維持正常顯示。
+- 該車手下一次通過終點線（TimingData 的 lap / last-lap 更新）後，
+  才在自己的車手列顯示 `🏁`。
 
-V0.6.4 改為優先使用官方 ExtrapolatedClock 的 Utc anchor：
-`effective remaining = Remaining - (現在時間 - 官方 anchor Utc)`
+### Race
+- 收到官方 Race Control `CHEQUERED` 後進入 finish phase。
+- 當下 P1 先顯示 `🏁`。
+- 其他車手之後各自通過終點線時，再逐一顯示 `🏁`。
+- DNF / Retired 不因 session 結束而自動補旗。
 
-因此重新整理 / 重開時，會先校正到當下應有的剩餘時間，再繼續倒數。
-官方 feed 若明確 `Extrapolating=false`（例如 session 暫停），倒數會停住，不自行扣時間。
+TRACK 卡仍只顯示賽道全場狀態：
+GREEN / YELLOW / SC / VSC / RED FLAG 等。
 
-## 4. Race 更新頻率
-- Race LIVE：3 秒
-- Practice / Qualifying LIVE：維持 5 秒
-- Session Clock 畫面：仍每秒平滑顯示
-- request 防重疊與 timeout 保留
+## 保留 V0.6.4
+- Race LIVE 約 3 秒輪詢
+- FP / Qualifying LIVE 約 5 秒
+- Session Clock UTC anchor 修正
+- SC / VSC 黃色、Red Flag 紅色
+- 輪胎標準顏色
+- request 防重疊與 timeout
 
 ## 上傳
-只需覆蓋：
-`public/index.html`
-
-`server.js` 不必修改。
+覆蓋：
+- `public/index.html`
+- `server.js`
+- `package.json`
+- `README.md`
