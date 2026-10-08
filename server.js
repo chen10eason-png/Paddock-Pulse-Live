@@ -53,14 +53,57 @@ function isChequeredMessage(m){
   return f==='CHEQUERED'||f==='CHECKERED'||
     msg.includes('CHEQUERED FLAG')||msg.includes('CHECKERED FLAG');
 }
-function beginFinishPhase(kind){
+
+function parseUtcMs(v){
+  const ms=Date.parse(v||'');
+  return Number.isFinite(ms)?ms:null;
+}
+function chequeredEventMs(messages=state.raceControl){
+  let hit=null;
+  for(const m of messages||[]){
+    if(!isChequeredMessage(m))continue;
+    const ms=parseUtcMs(m?.Utc??m?.UTC??m?.Timestamp??m?.Time);
+    if(ms!=null&&(hit==null||ms>hit))hit=ms;
+  }
+  return hit;
+}
+function clockSessionEndMs(){
+  const utc=parseUtcMs(state.clock?.Utc??state.clock?.UTC??state.clock?.utc);
+  const remaining=parseClockSeconds(state.clock?.Remaining);
+  if(utc!=null&&Number.isFinite(remaining))return utc+remaining*1000;
+  return null;
+}
+function scheduledSessionEndMs(){
+  return parseUtcMs(
+    state.session?.EndDate ??
+    state.session?.EndTime ??
+    state.session?.EndDateTime ??
+    state.session?.GmtDateTime
+  );
+}
+function officialFinishStartMs(kind,messages=null){
+  if(kind==='race'){
+    return chequeredEventMs(messages||state.raceControl) ??
+      scheduledSessionEndMs() ??
+      null;
+  }
+  if(kind==='practice'||kind==='qualifying'){
+    return clockSessionEndMs() ??
+      scheduledSessionEndMs() ??
+      null;
+  }
+  return scheduledSessionEndMs();
+}
+function beginFinishPhase(kind,officialStartedAt=null){
   const sid=sessionIdentity(state.session);
   if(finishTracker.session!==sid)resetFinishTracker();
   if(finishTracker.active)return;
 
   finishTracker.active=true;
   finishTracker.kind=kind;
-  finishTracker.startedAt=Date.now();
+  const now=Date.now();
+  const official=Number(officialStartedAt);
+  finishTracker.startedAt=Number.isFinite(official)&&official>0?Math.min(official,now):now;
   finishTracker.expiresAt=finishTracker.startedAt+60*60*1000;
   const lines=state.timing?.Lines||{};
   for(const [n,t] of Object.entries(lines)){
@@ -106,13 +149,13 @@ function updateFinishPhase(){
   const kind=currentSessionKind();
   if((kind==='practice'||kind==='qualifying')){
     const remaining=parseClockSeconds(state.clock?.Remaining);
-    if(Number.isFinite(remaining)&&remaining<=0)beginFinishPhase(kind);
+    if(Number.isFinite(remaining)&&remaining<=0)beginFinishPhase(kind,officialFinishStartMs(kind));
   }
 
   const ss=String(sessionStatusValue()).toLowerCase();
   if(['finished','finalised','ended'].includes(ss)&&
-     (kind==='practice'||kind==='qualifying')&&!finishTracker.active){
-    beginFinishPhase(kind);
+     ['practice','qualifying','race'].includes(kind)&&!finishTracker.active){
+    beginFinishPhase(kind,officialFinishStartMs(kind));
   }
 }
 
@@ -142,7 +185,9 @@ function route(ch,payload){
   else if(ch==='RaceControlMessages'&&d.Messages){
     const m=(Array.isArray(d.Messages)?d.Messages:Object.values(d.Messages)).filter(plain);
     state.raceControl=[...state.raceControl,...m].slice(-100);
-    if(currentSessionKind()==='race'&&m.some(isChequeredMessage))beginFinishPhase('race');
+    if(currentSessionKind()==='race'&&m.some(isChequeredMessage)){
+      beginFinishPhase('race',officialFinishStartMs('race',m));
+    }
   }
   if(ch==='TimingData'||ch==='TimingDataF1'){
     captureBestLapTyres();
@@ -232,11 +277,11 @@ async function buildArchiveSession(path,meta=null){
   const info=session||{Name:meta?.Name||meta?.Type||'Session',Meeting:meta?.meeting||{}};
   const messages=raceControl?.Messages?(Array.isArray(raceControl.Messages)?raceControl.Messages:Object.values(raceControl.Messages)).filter(plain):[];
   const sameCurrent=sessionIdentity(info)&&sessionIdentity(info)===sessionIdentity(state.session);
-  return{version:'0.6.7',source:'archive',live:false,status:'RESULT',connected:state.connected,archivePath:path,lastMessageAt:state.lastMessageAt,lastTimingAt:null,session:info,sessionStatus:'Finalised',clock:clock||{},lap:lap||{},track:track||{},weather:weather||{},drivers:makeRows(drivers||{},timing||{},appData||{},sameCurrent?bestLapTyres:{},sameCurrent?visibleChequeredSet():new Set()),raceControl:messages.slice(-20).reverse()}
+  return{version:'0.6.8',source:'archive',live:false,status:'RESULT',connected:state.connected,archivePath:path,lastMessageAt:state.lastMessageAt,lastTimingAt:null,session:info,sessionStatus:'Finalised',clock:clock||{},lap:lap||{},track:track||{},weather:weather||{},drivers:makeRows(drivers||{},timing||{},appData||{},sameCurrent?bestLapTyres:{},sameCurrent?visibleChequeredSet():new Set()),raceControl:messages.slice(-20).reverse()}
 }
-app.get('/api/live',(req,res)=>{const status=feedStatus();res.json({version:'0.6.7',source:'live',live:status==='LIVE',status,connected:state.connected,lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,session:state.session,sessionStatus:sessionStatusValue(),clock:state.clock,lap:state.lap,track:state.track,weather:state.weather,drivers:rows(),raceControl:state.raceControl.slice(-20).reverse()})});
-app.get('/api/archive/meetings',async(req,res)=>{try{const idx=await seasonIndex();const meetings=(idx?.Meetings||[]).map(m=>({Key:m.Key,Name:m.Name,OfficialName:m.OfficialName,Location:m.Location,Country:m.Country,Circuit:m.Circuit,Sessions:(m.Sessions||[]).filter(s=>safePath(s.Path)).map(s=>({Key:s.Key,Name:s.Name,Type:s.Type,StartDate:s.StartDate,EndDate:s.EndDate,Path:s.Path}))}));res.json({version:'0.6.7',year:YEAR,meetings})}catch(e){res.status(502).json({error:String(e.message||e)})}});
+app.get('/api/live',(req,res)=>{const status=feedStatus();res.json({version:'0.6.8',source:'live',live:status==='LIVE',status,connected:state.connected,lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,session:state.session,sessionStatus:sessionStatusValue(),clock:state.clock,lap:state.lap,track:state.track,weather:state.weather,drivers:rows(),raceControl:state.raceControl.slice(-20).reverse()})});
+app.get('/api/archive/meetings',async(req,res)=>{try{const idx=await seasonIndex();const meetings=(idx?.Meetings||[]).map(m=>({Key:m.Key,Name:m.Name,OfficialName:m.OfficialName,Location:m.Location,Country:m.Country,Circuit:m.Circuit,Sessions:(m.Sessions||[]).filter(s=>safePath(s.Path)).map(s=>({Key:s.Key,Name:s.Name,Type:s.Type,StartDate:s.StartDate,EndDate:s.EndDate,Path:s.Path}))}));res.json({version:'0.6.8',year:YEAR,meetings})}catch(e){res.status(502).json({error:String(e.message||e)})}});
 app.get('/api/archive/latest',async(req,res)=>{try{const sessions=flattenSessions(await seasonIndex());if(!sessions.length)return res.status(404).json({error:'No archived sessions'});const s=sessions[sessions.length-1];res.json(await buildArchiveSession(s.Path,s))}catch(e){res.status(502).json({error:String(e.message||e)})}});
 app.get('/api/archive/session',async(req,res)=>{try{const path=String(req.query.path||'');if(!safePath(path))return res.status(400).json({error:'Invalid path'});res.json(await buildArchiveSession(path))}catch(e){res.status(502).json({error:String(e.message||e)})}});
-app.get('/api/status',(req,res)=>res.json({version:'0.6.7',connected:state.connected,status:feedStatus(),lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,sessionStatus:sessionStatusValue()||null,drivers:rows().length}));
-app.listen(PORT,()=>console.log('Paddock Pulse Live V0.6.7 http://localhost:'+PORT));
+app.get('/api/status',(req,res)=>res.json({version:'0.6.8',connected:state.connected,status:feedStatus(),lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,sessionStatus:sessionStatusValue()||null,drivers:rows().length}));
+app.listen(PORT,()=>console.log('Paddock Pulse Live V0.6.8 http://localhost:'+PORT));
