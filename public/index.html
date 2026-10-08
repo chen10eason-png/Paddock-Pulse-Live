@@ -7,18 +7,29 @@
 .tyre.hard{color:#f4f7fb}
 .tyre.intermediate{color:#42d77d}
 .tyre.wet{color:#4da3ff}
+.tyreBadge{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:19px;height:19px;margin-left:6px;border-radius:50%;
+  font-size:10px;font-weight:950;line-height:1;vertical-align:1px
+}
+.tyreBadge.soft{background:#ff3545;color:#fff}
+.tyreBadge.medium{background:#ffd21e;color:#111}
+.tyreBadge.hard{background:#f4f6f8;color:#111}
+.tyreBadge.intermediate{background:#36c768;color:#fff}
+.tyreBadge.wet{background:#3494ff;color:#fff}
 .metric.track-warning{border-color:#6c5b1f;background:#211d0e}
 .metric.track-warning b{color:#ffd24a}
 .metric.track-red{border-color:#74282d;background:#241114}
 .metric.track-red b{color:#ff5f68}
 .pit{color:#ffd24a!important;font-weight:950;letter-spacing:.04em}
-.cheq{display:inline-flex;align-items:center;justify-content:center;margin-left:6px;
-  width:20px;height:20px;border-radius:6px;font-size:12px;
-  background:linear-gradient(45deg,#fff 25%,#141820 25%,#141820 50%,#fff 50%,#fff 75%,#141820 75%);
-  background-size:8px 8px;border:1px solid #ffffff55}
+.cheq{
+  display:inline-block;width:16px;height:12px;margin-left:7px;vertical-align:-1px;
+  background:conic-gradient(#fff 25%,#111 0 50%,#fff 0 75%,#111 0) 0 0/8px 8px;
+  border:1px solid #dfe3e8;border-radius:1px
+}
 @keyframes flash{0%{background:#252b38}100%{background:#11151d}}@media(max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.metrics{grid-template-columns:1fr 1fr}.metric.clock{grid-column:1/-1}.driver{grid-template-columns:30px minmax(0,1fr) auto}.right{min-width:96px}.selects{grid-template-columns:1fr}}
 </style></head><body><main class="wrap">
-<div class="top"><div><div class="brand">Paddock Pulse Live</div><div class="sub">Driver Chequered · V0.6.5</div></div><div id="status" class="badge">LOADING</div></div>
+<div class="top"><div><div class="brand">Paddock Pulse Live</div><div class="sub">Tyre Badge & Flag Polish · V0.6.6</div></div><div id="status" class="badge">LOADING</div></div>
 <div class="mode"><button id="latestBtn" class="active">最新狀態</button><button id="historyBtn">歷史結果</button></div>
 <div id="historyPanel" class="historyPanel"><div class="selects"><select id="meetingSel"><option>載入賽事…</option></select><select id="sessionSel"><option>選擇 Session</option></select></div></div>
 <section class="hero"><div id="eyebrow" class="eyebrow">LOADING</div><div id="event" class="event">等待資料…</div><div id="meta" class="meta">正在取得最新 session</div><div class="metrics"><div class="metric"><span class="label">LAP</span><b id="lap">—</b></div><div class="metric" id="trackMetric"><span class="label">TRACK</span><b id="track">—</b></div><div class="metric clock"><span class="label">SESSION CLOCK</span><b id="clock">—</b></div></div><div class="grid"><div class="tiny"><span class="label">AIR</span><b id="air">—</b></div><div class="tiny"><span class="label">TRACK TEMP</span><b id="ttrack">—</b></div><div class="tiny"><span class="label">HUMIDITY</span><b id="hum">—</b></div><div class="tiny"><span class="label">WIND</span><b id="wind">—</b></div></div></section>
@@ -64,11 +75,23 @@ function displayedCompound(d,x){
   }
   return x.compound||'';
 }
-function tyreMarkup(d,x){
-  const compound=displayedCompound(d,x);
-  if(!compound)return'';
-  const prefix=(sessionKind(d)==='practice'||sessionKind(d)==='qualifying')&&sessionEnded(d)?'BEST ':'';
-  return ' · <span class="tyre '+tyreClass(compound)+'">'+prefix+esc(compound)+'</span>';
+function tyreLetter(compound){
+  const c=String(compound||'').toUpperCase();
+  if(c==='SOFT')return'S';
+  if(c==='MEDIUM')return'M';
+  if(c==='HARD')return'H';
+  if(c==='INTERMEDIATE')return'I';
+  if(c==='WET')return'W';
+  return'';
+}
+function tyreBadgeMarkup(d,x){
+  const compound=displayedCompound(d,x),letter=tyreLetter(compound);
+  if(!compound||!letter)return'';
+  return '<span class="tyreBadge '+tyreClass(compound)+'" title="'+esc(compound)+'">'+letter+'</span>';
+}
+function raceTyreMarkup(d,x){
+  if(sessionKind(d)!=='race'||!x.compound)return'';
+  return ' · <span class="tyre '+tyreClass(x.compound)+'">'+esc(x.compound)+'</span>';
 }
 function trackState(d){
   const code=String(d.track?.Status??'').trim();
@@ -217,7 +240,7 @@ function render(d){
      const gap=x.statsGap||computed;
      const interval=x.statsInterval||'';
      const q=x.qualTimes||[];
-     right=`<div class="best">${esc(x.bestLap||'—')}</div><div class="detail">GAP ${esc(gap)}${interval?' · AHEAD '+esc(interval):''}</div>`;
+     right=`<div class="best">${esc(x.bestLap||'—')}${tyreBadgeMarkup(d,x)}</div><div class="detail">GAP ${esc(gap)}${interval?' · AHEAD '+esc(interval):''}</div>`;
      if(kind==='qualifying'&&q.length)extra=`<div class="qparts">${q.map((v,i)=>'Q'+(i+1)+' '+esc(v)).join(' · ')}</div>`;
    }else{
      const v=gapMode==='interval'?(x.position===1?'LEADER':x.interval||'—'):(x.position===1?'LEADER':x.gap||'—');
@@ -225,7 +248,7 @@ function render(d){
        ? `<div class="gap pit">IN PIT</div><div class="detail">${x.lastLap?'LAST '+esc(x.lastLap):'LAST —'}${x.bestLap?' · BEST '+esc(x.bestLap):''}</div>`
        : `<div class="gap">${esc(v)}</div><div class="detail">${x.lastLap?'LAST '+esc(x.lastLap):'LAST —'}${x.bestLap?' · BEST '+esc(x.bestLap):''}</div>`;
    }
-   return `<div class="driver ${x.retired?'retired ':''}${String(x.number)===String(best.number)&&x.bestLap?'fastest ':''}${changed.has(String(x.number))?'flash':''}" style="--team:#${esc(x.teamColour||'777777')}"><div class="pos">${esc(x.position)}</div><div><div class="name">${esc(x.tla||x.name||x.number)} #${esc(x.number)}${x.chequered?'<span class="cheq" title="Chequered">🏁</span>':''}${state}${fast}</div><div class="team">${esc(x.team)}${sessionAware&&x.laps!=null?' · '+esc(x.laps)+' LAPS':''}${tyreMarkup(d,x)}</div>${extra}</div><div class="right">${right}</div></div>`
+   return `<div class="driver ${x.retired?'retired ':''}${String(x.number)===String(best.number)&&x.bestLap?'fastest ':''}${changed.has(String(x.number))?'flash':''}" style="--team:#${esc(x.teamColour||'777777')}"><div class="pos">${esc(x.position)}</div><div><div class="name">${esc(x.tla||x.name||x.number)} #${esc(x.number)}${x.chequered?'<span class="cheq" title="Chequered" aria-label="Chequered"></span>':''}${state}${fast}</div><div class="team">${esc(x.team)}${sessionAware&&x.laps!=null?' · '+esc(x.laps)+' LAPS':''}${raceTyreMarkup(d,x)}</div>${extra}</div><div class="right">${right}</div></div>`
  }).join('')||'<div class="empty">目前沒有車手資料</div>';
  $('rc').innerHTML=(d.raceControl||[]).slice(0,14).map(x=>`<div class="msg"><strong>${esc(x.Flag||x.Category||'Race Control')}${x.Lap?' · LAP '+esc(x.Lap):''}</strong><div class="detail">${esc(x.Message||'')}</div></div>`).join('')||'<div class="empty">目前沒有 Race Control 訊息</div>';
  $('updated').textContent=d.source==='archive'?'資料來源：F1 Live Timing Archive':'最後 Live Timing 更新：'+(d.lastTimingAt?new Date(d.lastTimingAt).toLocaleString('zh-TW'):'—')
