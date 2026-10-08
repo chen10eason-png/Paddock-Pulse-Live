@@ -1,32 +1,30 @@
-# Paddock Pulse Live V0.6.6 — Tyre Badge & Flag Polish
+# Paddock Pulse Live V0.6.7 — Race Tyre Timing Badge
 
-基準：GitHub 已部署的 V0.6.5 Driver Chequered。
+基準：GitHub 已部署 V0.6.6。
 
-## FP / Qualifying 輪胎
-- 不再在輪胎前加 `BEST`。
-- LIVE：顯示車手當下使用的輪胎。
-- Session 結束：顯示車手跑出個人最快圈時使用的輪胎。
-- 輪胎移到最快圈時間右側，以圓形 badge 顯示：
-  - S = Soft
-  - M = Medium
-  - H = Hard
-  - I = Intermediate
-  - W = Wet
-- badge 使用對應輪胎顏色。
+## Race tyre placement
+正賽輪胎現在和 FP / Qualifying 使用同一種圓形 S / M / H / I / W badge。
 
-## Driver Chequered
-- 仍是每位車手個別出現，不是全場 TRACK 狀態。
-- 移除 emoji 方格旗。
-- 改成單純黑白相間 checker marker。
-- FP / Qualifying：時間到後，車手完成最後一圈才出現。
-- Race：官方 CHEQUERED 後，車手逐一過線才出現。
+位置改為右側 Timing 數值旁：
+- GAP 模式：`+3.421  [M]`
+- INTERVAL 模式：`+0.742  [M]`
+- IN PIT：`IN PIT  [M]`
+
+不再把 `SOFT / MEDIUM / HARD ...` 文字放在車隊名稱後方。
+
+正賽仍顯示「當下 stint」使用的輪胎；不會在正賽結束後切成最快圈輪胎。
+
+## Driver chequered — 1 hour
+V0.6.6 的 Server 邏輯已經是所有 finish phase 共用 1 小時期限，
+因此 Race 也一樣：
+- 官方 CHEQUERED 後，車手逐一過線才出現黑白 checker marker。
+- finish phase 開始後 1 小時自動隱藏。
 - DNF / Retired 不自動補旗。
 
-## 顯示期限
-- 方格旗只在 finish phase 開始後 1 小時內顯示。
-- 超過 1 小時自動隱藏。
+FP / Qualifying 同樣維持 1 小時上限。
 
 ## 保留
+- FP/Q LIVE 顯示當下輪胎，結束後顯示個人最快圈輪胎
 - Race `IN PIT` 取代 GAP / INTERVAL
 - Race LIVE 約 3 秒更新
 - FP / Qualifying LIVE 約 5 秒
