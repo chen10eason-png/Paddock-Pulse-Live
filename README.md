@@ -1,43 +1,37 @@
-# Paddock Pulse Live V0.6.5 — Driver Chequered
+# Paddock Pulse Live V0.6.6 — Tyre Badge & Flag Polish
 
-這是 V0.6.5 的更正版；未使用先前「TRACK 全場方格旗」設計。
+基準：GitHub 已部署的 V0.6.5 Driver Chequered。
 
 ## FP / Qualifying 輪胎
-- LIVE：顯示車手當下使用的 compound。
-- Session 結束：顯示該車手跑出個人最快圈時使用的 compound。
-- Server 在 Best Lap 更新時記錄當下 tyre compound。
-- 無法確認就不猜。
+- 不再在輪胎前加 `BEST`。
+- LIVE：顯示車手當下使用的輪胎。
+- Session 結束：顯示車手跑出個人最快圈時使用的輪胎。
+- 輪胎移到最快圈時間右側，以圓形 badge 顯示：
+  - S = Soft
+  - M = Medium
+  - H = Hard
+  - I = Intermediate
+  - W = Wet
+- badge 使用對應輪胎顏色。
 
-## Race — IN PIT
-- 正賽 `InPit=true` 時，GAP / INTERVAL 主位置改成 `IN PIT`。
-- 出 pit 後恢復差距。
-- Last Lap / Best Lap 保留。
+## Driver Chequered
+- 仍是每位車手個別出現，不是全場 TRACK 狀態。
+- 移除 emoji 方格旗。
+- 改成單純黑白相間 checker marker。
+- FP / Qualifying：時間到後，車手完成最後一圈才出現。
+- Race：官方 CHEQUERED 後，車手逐一過線才出現。
+- DNF / Retired 不自動補旗。
 
-## 方格旗：每位車手個別顯示
-方格旗不再放在 TRACK 卡。
+## 顯示期限
+- 方格旗只在 finish phase 開始後 1 小時內顯示。
+- 超過 1 小時自動隱藏。
 
-### FP / Qualifying
-- Session 時間到 00:00 後進入 finish phase。
-- 還在最後一圈的車手先維持正常顯示。
-- 該車手下一次通過終點線（TimingData 的 lap / last-lap 更新）後，
-  才在自己的車手列顯示 `🏁`。
-
-### Race
-- 收到官方 Race Control `CHEQUERED` 後進入 finish phase。
-- 當下 P1 先顯示 `🏁`。
-- 其他車手之後各自通過終點線時，再逐一顯示 `🏁`。
-- DNF / Retired 不因 session 結束而自動補旗。
-
-TRACK 卡仍只顯示賽道全場狀態：
-GREEN / YELLOW / SC / VSC / RED FLAG 等。
-
-## 保留 V0.6.4
-- Race LIVE 約 3 秒輪詢
+## 保留
+- Race `IN PIT` 取代 GAP / INTERVAL
+- Race LIVE 約 3 秒更新
 - FP / Qualifying LIVE 約 5 秒
-- Session Clock UTC anchor 修正
+- Session Clock UTC anchor
 - SC / VSC 黃色、Red Flag 紅色
-- 輪胎標準顏色
-- request 防重疊與 timeout
 
 ## 上傳
 覆蓋：

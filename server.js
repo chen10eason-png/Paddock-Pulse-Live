@@ -14,7 +14,9 @@ let finishTracker={
   kind:'',
   baselineLaps:{},
   baselineLastLap:{},
-  flagged:new Set()
+  flagged:new Set(),
+  startedAt:0,
+  expiresAt:0
 };
 
 function parseClockSeconds(v){
@@ -40,7 +42,9 @@ function resetFinishTracker(){
     kind:currentSessionKind(),
     baselineLaps:{},
     baselineLastLap:{},
-    flagged:new Set()
+    flagged:new Set(),
+    startedAt:0,
+    expiresAt:0
   };
 }
 function isChequeredMessage(m){
@@ -56,6 +60,8 @@ function beginFinishPhase(kind){
 
   finishTracker.active=true;
   finishTracker.kind=kind;
+  finishTracker.startedAt=Date.now();
+  finishTracker.expiresAt=finishTracker.startedAt+60*60*1000;
   const lines=state.timing?.Lines||{};
   for(const [n,t] of Object.entries(lines)){
     finishTracker.baselineLaps[n]=Number(t?.NumberOfLaps||t?.Laps||0)||0;
@@ -75,6 +81,7 @@ function beginFinishPhase(kind){
 }
 function updateDriverFinishFromTimingDelta(delta){
   if(!finishTracker.active)return;
+  if(finishTracker.expiresAt&&Date.now()>finishTracker.expiresAt)return;
   const changed=delta?.Lines||{};
   const lines=state.timing?.Lines||{};
   for(const n of Object.keys(changed)){
@@ -187,7 +194,11 @@ function extractQualTimes(t){
   const a=Array.isArray(raw)?raw:Object.keys(raw).sort((x,y)=>Number(x)-Number(y)).map(k=>raw[k]);
   return a.map(x=>x?.Value||x||'').filter(Boolean)
 }
-function makeRows(drivers,timing,appData,bestCompounds={},chequeredSet=finishTracker.flagged){
+function visibleChequeredSet(){
+  if(!finishTracker.active||!finishTracker.expiresAt||Date.now()>finishTracker.expiresAt)return new Set();
+  return finishTracker.flagged;
+}
+function makeRows(drivers,timing,appData,bestCompounds={},chequeredSet=visibleChequeredSet()){
   const lines=timing?.Lines||{},apps=appData?.Lines||{};
   const nums=new Set([...Object.keys(drivers||{}),...Object.keys(lines),...Object.keys(apps)]);
   return [...nums].filter(n=>n&&!String(n).startsWith('_')).map(n=>{
@@ -205,7 +216,7 @@ function makeRows(drivers,timing,appData,bestCompounds={},chequeredSet=finishTra
     }
   }).sort((a,b)=>a.position-b.position)
 }
-function rows(){captureBestLapTyres();updateFinishPhase();return makeRows(state.drivers,state.timing,state.app,bestLapTyres,finishTracker.flagged)}
+function rows(){captureBestLapTyres();updateFinishPhase();return makeRows(state.drivers,state.timing,state.app,bestLapTyres,visibleChequeredSet())}
 function sessionStatusValue(){return state.sessionStatus?.Status||state.sessionStatus?.SessionStatus||state.session?.SessionStatus||''}
 function feedStatus(){if(!state.connected)return'OFFLINE';const ss=String(sessionStatusValue()).toLowerCase(),archive=String(state.session?.ArchiveStatus?.Status||'').toLowerCase();if(['finalised','finished','ended'].includes(ss)||archive==='complete')return'FINAL';if(['started','active','running'].includes(ss)){if(!state.lastTimingAt)return'CONNECTING';return Date.now()-Date.parse(state.lastTimingAt)<=30000?'LIVE':'STALE'}return rows().length?'STALE':'WAITING'}
 function safePath(p){return typeof p==='string'&&p.startsWith(String(YEAR)+'/')&&/^[\w\-./]+$/.test(p)&&!p.includes('..')}
@@ -221,11 +232,11 @@ async function buildArchiveSession(path,meta=null){
   const info=session||{Name:meta?.Name||meta?.Type||'Session',Meeting:meta?.meeting||{}};
   const messages=raceControl?.Messages?(Array.isArray(raceControl.Messages)?raceControl.Messages:Object.values(raceControl.Messages)).filter(plain):[];
   const sameCurrent=sessionIdentity(info)&&sessionIdentity(info)===sessionIdentity(state.session);
-  return{version:'0.6.5',source:'archive',live:false,status:'RESULT',connected:state.connected,archivePath:path,lastMessageAt:state.lastMessageAt,lastTimingAt:null,session:info,sessionStatus:'Finalised',clock:clock||{},lap:lap||{},track:track||{},weather:weather||{},drivers:makeRows(drivers||{},timing||{},appData||{},sameCurrent?bestLapTyres:{},sameCurrent?finishTracker.flagged:new Set()),raceControl:messages.slice(-20).reverse()}
+  return{version:'0.6.6',source:'archive',live:false,status:'RESULT',connected:state.connected,archivePath:path,lastMessageAt:state.lastMessageAt,lastTimingAt:null,session:info,sessionStatus:'Finalised',clock:clock||{},lap:lap||{},track:track||{},weather:weather||{},drivers:makeRows(drivers||{},timing||{},appData||{},sameCurrent?bestLapTyres:{},sameCurrent?visibleChequeredSet():new Set()),raceControl:messages.slice(-20).reverse()}
 }
-app.get('/api/live',(req,res)=>{const status=feedStatus();res.json({version:'0.6.5',source:'live',live:status==='LIVE',status,connected:state.connected,lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,session:state.session,sessionStatus:sessionStatusValue(),clock:state.clock,lap:state.lap,track:state.track,weather:state.weather,drivers:rows(),raceControl:state.raceControl.slice(-20).reverse()})});
-app.get('/api/archive/meetings',async(req,res)=>{try{const idx=await seasonIndex();const meetings=(idx?.Meetings||[]).map(m=>({Key:m.Key,Name:m.Name,OfficialName:m.OfficialName,Location:m.Location,Country:m.Country,Circuit:m.Circuit,Sessions:(m.Sessions||[]).filter(s=>safePath(s.Path)).map(s=>({Key:s.Key,Name:s.Name,Type:s.Type,StartDate:s.StartDate,EndDate:s.EndDate,Path:s.Path}))}));res.json({version:'0.6.5',year:YEAR,meetings})}catch(e){res.status(502).json({error:String(e.message||e)})}});
+app.get('/api/live',(req,res)=>{const status=feedStatus();res.json({version:'0.6.6',source:'live',live:status==='LIVE',status,connected:state.connected,lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,session:state.session,sessionStatus:sessionStatusValue(),clock:state.clock,lap:state.lap,track:state.track,weather:state.weather,drivers:rows(),raceControl:state.raceControl.slice(-20).reverse()})});
+app.get('/api/archive/meetings',async(req,res)=>{try{const idx=await seasonIndex();const meetings=(idx?.Meetings||[]).map(m=>({Key:m.Key,Name:m.Name,OfficialName:m.OfficialName,Location:m.Location,Country:m.Country,Circuit:m.Circuit,Sessions:(m.Sessions||[]).filter(s=>safePath(s.Path)).map(s=>({Key:s.Key,Name:s.Name,Type:s.Type,StartDate:s.StartDate,EndDate:s.EndDate,Path:s.Path}))}));res.json({version:'0.6.6',year:YEAR,meetings})}catch(e){res.status(502).json({error:String(e.message||e)})}});
 app.get('/api/archive/latest',async(req,res)=>{try{const sessions=flattenSessions(await seasonIndex());if(!sessions.length)return res.status(404).json({error:'No archived sessions'});const s=sessions[sessions.length-1];res.json(await buildArchiveSession(s.Path,s))}catch(e){res.status(502).json({error:String(e.message||e)})}});
 app.get('/api/archive/session',async(req,res)=>{try{const path=String(req.query.path||'');if(!safePath(path))return res.status(400).json({error:'Invalid path'});res.json(await buildArchiveSession(path))}catch(e){res.status(502).json({error:String(e.message||e)})}});
-app.get('/api/status',(req,res)=>res.json({version:'0.6.5',connected:state.connected,status:feedStatus(),lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,sessionStatus:sessionStatusValue()||null,drivers:rows().length}));
-app.listen(PORT,()=>console.log('Paddock Pulse Live V0.6.5 http://localhost:'+PORT));
+app.get('/api/status',(req,res)=>res.json({version:'0.6.6',connected:state.connected,status:feedStatus(),lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,sessionStatus:sessionStatusValue()||null,drivers:rows().length}));
+app.listen(PORT,()=>console.log('Paddock Pulse Live V0.6.6 http://localhost:'+PORT));
