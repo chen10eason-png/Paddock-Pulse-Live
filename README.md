@@ -1,32 +1,34 @@
-# Paddock Pulse Live V0.6.8 — Official Finish Expiry
+# Paddock Pulse Live V0.6.9 — Quali Phase Flags & DNF
 
-## 修正：方格旗超過 1 小時仍存在
+## Q1/SQ1 → Q2/SQ2 → Q3/SQ3 方格旗
+- Q1/SQ1 結束：完成最後一圈的車手出現黑白 checker。
+- Q2/SQ2 開始後：有晉級的車手，上一段 checker 會移除。
+- 未晉級車手可保留上一段完成狀態。
+- Q2/SQ2 結束後，晉級車手完成最後一圈再出現 checker。
+- Q3/SQ3 同理。
+- 所有 checker 仍受「官方 Session 結束 + 1 小時」限制。
 
-V0.6.6 / V0.6.7 雖然有 1 小時限制，但起點用的是 Server 當下時間。
-所以 Render / Server 重新啟動時，可能把「現在」重新當成 Session 結束時間，
-讓已經結束很久的 Race / FP / Qualifying 又多顯示一小時方格旗。
+Phase 使用 TimingData 的 BestLapTimes 判斷；晉級名單優先依 KnockedOut，
+必要時用當下 classification cut line fallback（Q2 top 15、Q3 top 10）。
 
-## V0.6.8
+## DNF 修正
+之前前端只看 `Retired`，因此部分 `Stopped=true`、`Retired=false` 的正賽車手會漏掉 DNF。
 
-所有 Session 的 per-driver chequered 改成以官方 Session 結束時間為基準：
+V0.6.9：
+- Race / Sprint：`Retired` 或 `Stopped` 都會顯示 DNF。
+- Qualifying 的 `KnockedOut` 不會被誤標為 DNF。
+- FP/Q 一般停車不直接當成 DNF。
 
-- Race / Sprint：優先使用 Race Control `CHEQUERED` 訊息的 UTC timestamp。
-- FP / Qualifying：優先使用 `ExtrapolatedClock.Utc + Remaining` 算出的官方 Session end。
-- fallback：使用 `SessionInfo` 的 EndDate / EndTime。
+## IN PIT 顏色
+`IN PIT` 改用車手所屬車隊顏色，不再固定黃色。
 
-因此：
-- Server restart 不會重新開始一小時計時。
-- 頁面 refresh / 關掉重開不會重新開始一小時計時。
-- Race / FP / Qualifying / Sprint 都使用同一條規則。
-- 官方 Session 結束時間 + 1 小時後，所有車手方格旗都必須隱藏。
-
-## 其他功能不變
-- 每位車手各自過線才出現黑白 checker marker
-- DNF / Retired 不自動補旗
+## 保留
 - Race tyre badge 在 GAP / INTERVAL / IN PIT 旁
 - FP/Q tyre badge 在最快圈時間旁
 - Race 約 3 秒更新
 - FP/Q 約 5 秒更新
+- 官方 Session 結束 + 1 小時後 checker 隱藏
+- SC / VSC 黃色、Red Flag 紅色
 
 ## 上傳
 覆蓋：

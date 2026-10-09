@@ -16,7 +16,8 @@ let finishTracker={
   baselineLastLap:{},
   flagged:new Set(),
   startedAt:0,
-  expiresAt:0
+  expiresAt:0,
+  stage:0
 };
 
 function parseClockSeconds(v){
@@ -35,6 +36,49 @@ function currentSessionKind(){
   if(s.includes('race')||s.includes('sprint'))return'race';
   return'other';
 }
+
+function timingQualPhase(){
+  if(currentSessionKind()!=='qualifying')return 0;
+  let max=0;
+  const lines=state.timing?.Lines||{};
+  for(const t of Object.values(lines)){
+    const raw=t?.BestLapTimes;
+    if(!raw)continue;
+    const a=Array.isArray(raw)?raw:Object.values(raw);
+    const count=a.filter(x=>x&&(x?.Value||x)).length;
+    if(count>max)max=count;
+  }
+  return Math.max(1,Math.min(3,max||1));
+}
+function driverQualifiedForStage(t,stage){
+  if(stage<=1)return true;
+  if(t?.KnockedOut===true)return false;
+  const raw=t?.BestLapTimes;
+  const a=raw?(Array.isArray(raw)?raw:Object.values(raw)):[];
+  const count=a.filter(x=>x&&(x?.Value||x)).length;
+  if(count>=stage)return true;
+  const pos=Number(t?.Position||999);
+  return stage===2 ? pos<=15 : pos<=10;
+}
+function advanceQualifyingStage(nextStage){
+  if(currentSessionKind()!=='qualifying')return;
+  const next=Math.max(1,Math.min(3,Number(nextStage)||1));
+  if(next<=Number(finishTracker.stage||0))return;
+
+  const lines=state.timing?.Lines||{};
+  for(const [n,t] of Object.entries(lines)){
+    if(driverQualifiedForStage(t,next)){
+      finishTracker.flagged.delete(String(n));
+    }
+  }
+
+  finishTracker.stage=next;
+  finishTracker.active=false;
+  finishTracker.startedAt=0;
+  finishTracker.expiresAt=0;
+  finishTracker.baselineLaps={};
+  finishTracker.baselineLastLap={};
+}
 function resetFinishTracker(){
   finishTracker={
     session:sessionIdentity(state.session),
@@ -44,7 +88,8 @@ function resetFinishTracker(){
     baselineLastLap:{},
     flagged:new Set(),
     startedAt:0,
-    expiresAt:0
+    expiresAt:0,
+    stage:currentSessionKind()==='qualifying'?1:0
   };
 }
 function isChequeredMessage(m){
@@ -101,6 +146,7 @@ function beginFinishPhase(kind,officialStartedAt=null){
 
   finishTracker.active=true;
   finishTracker.kind=kind;
+  if(kind==='qualifying')finishTracker.stage=timingQualPhase();
   const now=Date.now();
   const official=Number(officialStartedAt);
   finishTracker.startedAt=Number.isFinite(official)&&official>0?Math.min(official,now):now;
@@ -167,7 +213,13 @@ function route(ch,payload){
   if(payload==null)return;
   if(ch==='TimingData'||ch==='TimingDataF1')state.lastTimingAt=new Date().toISOString();
   const d=typeof payload==='string'?JSON.parse(payload):payload;
-  if(ch==='TimingData'||ch==='TimingDataF1')merge(state.timing,d);
+  if(ch==='TimingData'||ch==='TimingDataF1'){
+    merge(state.timing,d);
+    if(currentSessionKind()==='qualifying'){
+      const phase=timingQualPhase();
+      if(phase>Number(finishTracker.stage||1))advanceQualifyingStage(phase);
+    }
+  }
   else if(ch==='TimingAppData')merge(state.app,d);
   else if(ch==='DriverList')merge(state.drivers,d);
   else if(ch==='SessionInfo'){
@@ -257,6 +309,7 @@ function makeRows(drivers,timing,appData,bestCompounds={},chequeredSet=visibleCh
       statsInterval:t.Stats?.TimeDifftoPositionAhead?.Value||t.Stats?.TimeDifftoPositionAhead||'',
       laps:Number(t.NumberOfLaps||t.Laps||0)||null,
       inPit:!!t.InPit,pitOut:!!t.PitOut,pitStops:t.NumberOfPitStops??null,retired:!!t.Retired,stopped:!!t.Stopped,knockOut:!!t.KnockedOut,
+      dnf:!!t.Retired||(currentSessionKind()==='race'&&!!t.Stopped),
       compound:st?.Compound||'',bestLapCompound:bestCompounds?.[n]?.compound||compoundForBestLap(t,a)||'',chequered:chequeredSet?.has?.(String(n))||false,tyreLaps:st?.TotalLaps??st?.StartLaps??null
     }
   }).sort((a,b)=>a.position-b.position)
@@ -277,11 +330,11 @@ async function buildArchiveSession(path,meta=null){
   const info=session||{Name:meta?.Name||meta?.Type||'Session',Meeting:meta?.meeting||{}};
   const messages=raceControl?.Messages?(Array.isArray(raceControl.Messages)?raceControl.Messages:Object.values(raceControl.Messages)).filter(plain):[];
   const sameCurrent=sessionIdentity(info)&&sessionIdentity(info)===sessionIdentity(state.session);
-  return{version:'0.6.8',source:'archive',live:false,status:'RESULT',connected:state.connected,archivePath:path,lastMessageAt:state.lastMessageAt,lastTimingAt:null,session:info,sessionStatus:'Finalised',clock:clock||{},lap:lap||{},track:track||{},weather:weather||{},drivers:makeRows(drivers||{},timing||{},appData||{},sameCurrent?bestLapTyres:{},sameCurrent?visibleChequeredSet():new Set()),raceControl:messages.slice(-20).reverse()}
+  return{version:'0.6.9',source:'archive',live:false,status:'RESULT',connected:state.connected,archivePath:path,lastMessageAt:state.lastMessageAt,lastTimingAt:null,session:info,sessionStatus:'Finalised',clock:clock||{},lap:lap||{},track:track||{},weather:weather||{},drivers:makeRows(drivers||{},timing||{},appData||{},sameCurrent?bestLapTyres:{},sameCurrent?visibleChequeredSet():new Set()),raceControl:messages.slice(-20).reverse()}
 }
-app.get('/api/live',(req,res)=>{const status=feedStatus();res.json({version:'0.6.8',source:'live',live:status==='LIVE',status,connected:state.connected,lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,session:state.session,sessionStatus:sessionStatusValue(),clock:state.clock,lap:state.lap,track:state.track,weather:state.weather,drivers:rows(),raceControl:state.raceControl.slice(-20).reverse()})});
-app.get('/api/archive/meetings',async(req,res)=>{try{const idx=await seasonIndex();const meetings=(idx?.Meetings||[]).map(m=>({Key:m.Key,Name:m.Name,OfficialName:m.OfficialName,Location:m.Location,Country:m.Country,Circuit:m.Circuit,Sessions:(m.Sessions||[]).filter(s=>safePath(s.Path)).map(s=>({Key:s.Key,Name:s.Name,Type:s.Type,StartDate:s.StartDate,EndDate:s.EndDate,Path:s.Path}))}));res.json({version:'0.6.8',year:YEAR,meetings})}catch(e){res.status(502).json({error:String(e.message||e)})}});
+app.get('/api/live',(req,res)=>{const status=feedStatus();res.json({version:'0.6.9',source:'live',live:status==='LIVE',status,connected:state.connected,lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,session:state.session,sessionStatus:sessionStatusValue(),clock:state.clock,lap:state.lap,track:state.track,weather:state.weather,drivers:rows(),raceControl:state.raceControl.slice(-20).reverse()})});
+app.get('/api/archive/meetings',async(req,res)=>{try{const idx=await seasonIndex();const meetings=(idx?.Meetings||[]).map(m=>({Key:m.Key,Name:m.Name,OfficialName:m.OfficialName,Location:m.Location,Country:m.Country,Circuit:m.Circuit,Sessions:(m.Sessions||[]).filter(s=>safePath(s.Path)).map(s=>({Key:s.Key,Name:s.Name,Type:s.Type,StartDate:s.StartDate,EndDate:s.EndDate,Path:s.Path}))}));res.json({version:'0.6.9',year:YEAR,meetings})}catch(e){res.status(502).json({error:String(e.message||e)})}});
 app.get('/api/archive/latest',async(req,res)=>{try{const sessions=flattenSessions(await seasonIndex());if(!sessions.length)return res.status(404).json({error:'No archived sessions'});const s=sessions[sessions.length-1];res.json(await buildArchiveSession(s.Path,s))}catch(e){res.status(502).json({error:String(e.message||e)})}});
 app.get('/api/archive/session',async(req,res)=>{try{const path=String(req.query.path||'');if(!safePath(path))return res.status(400).json({error:'Invalid path'});res.json(await buildArchiveSession(path))}catch(e){res.status(502).json({error:String(e.message||e)})}});
-app.get('/api/status',(req,res)=>res.json({version:'0.6.8',connected:state.connected,status:feedStatus(),lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,sessionStatus:sessionStatusValue()||null,drivers:rows().length}));
-app.listen(PORT,()=>console.log('Paddock Pulse Live V0.6.8 http://localhost:'+PORT));
+app.get('/api/status',(req,res)=>res.json({version:'0.6.9',connected:state.connected,status:feedStatus(),lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,sessionStatus:sessionStatusValue()||null,drivers:rows().length}));
+app.listen(PORT,()=>console.log('Paddock Pulse Live V0.6.9 http://localhost:'+PORT));
