@@ -21,7 +21,7 @@
 .metric.track-warning b{color:#ffd24a}
 .metric.track-red{border-color:#74282d;background:#241114}
 .metric.track-red b{color:#ff5f68}
-.pit{color:#ffd24a!important;font-weight:950;letter-spacing:.04em}
+.pit{color:var(--team,#aaa)!important;font-weight:950;letter-spacing:.04em}
 .cheq{
   display:inline-block;width:16px;height:12px;margin-left:7px;vertical-align:-1px;
   background:conic-gradient(#fff 25%,#111 0 50%,#fff 0 75%,#111 0) 0 0/8px 8px;
@@ -29,7 +29,7 @@
 }
 @keyframes flash{0%{background:#252b38}100%{background:#11151d}}@media(max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.metrics{grid-template-columns:1fr 1fr}.metric.clock{grid-column:1/-1}.driver{grid-template-columns:30px minmax(0,1fr) auto}.right{min-width:96px}.selects{grid-template-columns:1fr}}
 </style></head><body><main class="wrap">
-<div class="top"><div><div class="brand">Paddock Pulse Live</div><div class="sub">Official Finish Expiry · V0.6.8</div></div><div id="status" class="badge">LOADING</div></div>
+<div class="top"><div><div class="brand">Paddock Pulse Live</div><div class="sub">Quali Phase Flags & DNF · V0.6.9</div></div><div id="status" class="badge">LOADING</div></div>
 <div class="mode"><button id="latestBtn" class="active">最新狀態</button><button id="historyBtn">歷史結果</button></div>
 <div id="historyPanel" class="historyPanel"><div class="selects"><select id="meetingSel"><option>載入賽事…</option></select><select id="sessionSel"><option>選擇 Session</option></select></div></div>
 <section class="hero"><div id="eyebrow" class="eyebrow">LOADING</div><div id="event" class="event">等待資料…</div><div id="meta" class="meta">正在取得最新 session</div><div class="metrics"><div class="metric"><span class="label">LAP</span><b id="lap">—</b></div><div class="metric" id="trackMetric"><span class="label">TRACK</span><b id="track">—</b></div><div class="metric clock"><span class="label">SESSION CLOCK</span><b id="clock">—</b></div></div><div class="grid"><div class="tiny"><span class="label">AIR</span><b id="air">—</b></div><div class="tiny"><span class="label">TRACK TEMP</span><b id="ttrack">—</b></div><div class="tiny"><span class="label">HUMIDITY</span><b id="hum">—</b></div><div class="tiny"><span class="label">WIND</span><b id="wind">—</b></div></div></section>
@@ -229,7 +229,7 @@ function render(d){
  $('gapToggle').style.display=sessionAware?'none':'flex';
  $('drivers').innerHTML=ds.map(x=>{
    let right='',extra='';
-   const state=x.retired?'<span class="pill dnf">DNF</span>':'';
+   const state=x.dnf?'<span class="pill dnf">DNF</span>':'';
    const fast=String(x.number)===String(best.number)&&x.bestLap?'<span class="pill fast">FASTEST</span>':'';
    if(sessionAware){
      const sec=lapSeconds(x.bestLap),computed=Number.isFinite(sec)&&Number.isFinite(best.time)?fmtGap(sec-best.time):'—';
