@@ -6,6 +6,8 @@ const PORT=process.env.PORT||3000,ORIGIN='https://www.formula1.com',HTTP='https:
 const CHANNELS=['TimingData','TimingDataF1','TimingAppData','DriverList','SessionInfo','SessionStatus','ExtrapolatedClock','WeatherData','RaceControlMessages','LapCount','TrackStatus'];
 const state={connected:false,lastMessageAt:null,lastTimingAt:null,timing:{Lines:{}},app:{Lines:{}},drivers:{},session:{},sessionStatus:{},clock:{},weather:{},lap:{},track:{},raceControl:[]};
 const archiveCache=new Map();
+const JOLPICA='https://api.jolpi.ca/ergast/f1';
+const classificationCache={at:0,races:[],sprints:[]};
 let bestLapTyres={},bestLapTyreSession='';
 
 let finishTracker={
@@ -295,7 +297,7 @@ function visibleChequeredSet(){
   if(!finishTracker.active||!finishTracker.expiresAt||Date.now()>finishTracker.expiresAt)return new Set();
   return finishTracker.flagged;
 }
-function makeRows(drivers,timing,appData,bestCompounds={},chequeredSet=visibleChequeredSet()){
+function makeRows(drivers,timing,appData,bestCompounds={},chequeredSet=visibleChequeredSet(),kind=currentSessionKind()){
   const lines=timing?.Lines||{},apps=appData?.Lines||{};
   const nums=new Set([...Object.keys(drivers||{}),...Object.keys(lines),...Object.keys(apps)]);
   return [...nums].filter(n=>n&&!String(n).startsWith('_')).map(n=>{
@@ -309,12 +311,12 @@ function makeRows(drivers,timing,appData,bestCompounds={},chequeredSet=visibleCh
       statsInterval:t.Stats?.TimeDifftoPositionAhead?.Value||t.Stats?.TimeDifftoPositionAhead||'',
       laps:Number(t.NumberOfLaps||t.Laps||0)||null,
       inPit:!!t.InPit,pitOut:!!t.PitOut,pitStops:t.NumberOfPitStops??null,retired:!!t.Retired,stopped:!!t.Stopped,knockOut:!!t.KnockedOut,
-      dnf:!!t.Retired||(currentSessionKind()==='race'&&!!t.Stopped),
+      dnf:!!t.Retired||(kind==='race'&&!!t.Stopped),
       compound:st?.Compound||'',bestLapCompound:bestCompounds?.[n]?.compound||compoundForBestLap(t,a)||'',chequered:chequeredSet?.has?.(String(n))||false,tyreLaps:st?.TotalLaps??st?.StartLaps??null
     }
   }).sort((a,b)=>a.position-b.position)
 }
-function rows(){captureBestLapTyres();updateFinishPhase();return makeRows(state.drivers,state.timing,state.app,bestLapTyres,visibleChequeredSet())}
+function rows(){captureBestLapTyres();updateFinishPhase();return makeRows(state.drivers,state.timing,state.app,bestLapTyres,visibleChequeredSet(),currentSessionKind())}
 function sessionStatusValue(){return state.sessionStatus?.Status||state.sessionStatus?.SessionStatus||state.session?.SessionStatus||''}
 function feedStatus(){if(!state.connected)return'OFFLINE';const ss=String(sessionStatusValue()).toLowerCase(),archive=String(state.session?.ArchiveStatus?.Status||'').toLowerCase();if(['finalised','finished','ended'].includes(ss)||archive==='complete')return'FINAL';if(['started','active','running'].includes(ss)){if(!state.lastTimingAt)return'CONNECTING';return Date.now()-Date.parse(state.lastTimingAt)<=30000?'LIVE':'STALE'}return rows().length?'STALE':'WAITING'}
 function safePath(p){return typeof p==='string'&&p.startsWith(String(YEAR)+'/')&&/^[\w\-./]+$/.test(p)&&!p.includes('..')}
@@ -323,18 +325,162 @@ async function seasonIndex(){return fetchArchive(YEAR+'/Index.json',120000)}
 function sessionSortKey(s){const t=Date.parse(s.StartDate||s.EndDate||'');if(Number.isFinite(t))return t;const m=String(s.Path||'').match(/(\d{4}-\d{2}-\d{2})/);return m?Date.parse(m[1]+'T00:00:00Z'):0}
 function flattenSessions(idx){const out=[];for(const meeting of idx?.Meetings||[])for(const s of meeting.Sessions||[])if(safePath(s.Path))out.push({...s,meeting:{Key:meeting.Key,Name:meeting.Name,OfficialName:meeting.OfficialName,Location:meeting.Location,Country:meeting.Country,Circuit:meeting.Circuit}});return out.sort((a,b)=>sessionSortKey(a)-sessionSortKey(b))}
 async function getTopic(path,topic){if(!safePath(path))throw Error('Bad archive path');const idx=await fetchArchive(path+'Index.json',300000),feed=idx?.Feeds?.[topic],kp=feed?.KeyFramePath;if(!kp)return null;return fetchArchive(path+kp,300000)}
+
+function normalizeText(v){
+  return String(v||'').toLowerCase().replace(/grand prix|formula 1|f1/g,'')
+    .replace(/[^a-z0-9]+/g,' ').trim();
+}
+function archiveSessionKind(info){
+  const s=((info?.Name||'')+' '+(info?.Type||'')).toLowerCase();
+  if(s.includes('sprint')&&!s.includes('shootout')&&!s.includes('qualifying'))return'race';
+  if(s.includes('race'))return'race';
+  if(s.includes('qualifying'))return'qualifying';
+  if(s.includes('practice'))return'practice';
+  return'other';
+}
+function archiveIsSprint(info){
+  const s=((info?.Name||'')+' '+(info?.Type||'')).toLowerCase();
+  return s.includes('sprint')&&!s.includes('shootout')&&!s.includes('qualifying');
+}
+async function fetchJolpica(urlPath){
+  const r=await fetch(JOLPICA+urlPath,{headers:{Accept:'application/json'}});
+  if(!r.ok)throw Error('Jolpica HTTP '+r.status+' '+urlPath);
+  return r.json();
+}
+async function seasonClassifications(){
+  const now=Date.now();
+  if(classificationCache.at&&now-classificationCache.at<60*60*1000)return classificationCache;
+  const [raceData,sprintData]=await Promise.all([
+    fetchJolpica('/'+YEAR+'/results/?limit=2000').catch(()=>null),
+    fetchJolpica('/'+YEAR+'/sprint/?limit=2000').catch(()=>null)
+  ]);
+  classificationCache.races=raceData?.MRData?.RaceTable?.Races||[];
+  classificationCache.sprints=sprintData?.MRData?.RaceTable?.Races||[];
+  classificationCache.at=now;
+  return classificationCache;
+}
+function meetingTokens(info){
+  const m=info?.Meeting||{};
+  return [
+    normalizeText(m.Name),
+    normalizeText(m.OfficialName),
+    normalizeText(m.Location),
+    normalizeText(m.Country),
+    normalizeText(m.Circuit?.ShortName||m.Circuit?.Name)
+  ].filter(Boolean);
+}
+function jolpicaTokens(race){
+  return [
+    normalizeText(race?.raceName),
+    normalizeText(race?.Circuit?.circuitName),
+    normalizeText(race?.Circuit?.Location?.locality),
+    normalizeText(race?.Circuit?.Location?.country)
+  ].filter(Boolean);
+}
+function classificationRaceMatch(info,races){
+  const a=meetingTokens(info);
+  const start=Date.parse(info?.StartDate||info?.StartTime||info?.Date||'');
+  let best=null,bestScore=-1;
+  for(const race of races||[]){
+    const b=jolpicaTokens(race);
+    let score=0;
+    for(const x of a)for(const y of b){
+      if(x&&y&&(x===y||x.includes(y)||y.includes(x)))score+=x===y?4:2;
+    }
+    const raceMs=Date.parse((race?.date||'')+'T'+(race?.time||'00:00:00Z'));
+    if(Number.isFinite(start)&&Number.isFinite(raceMs)){
+      const days=Math.abs(start-raceMs)/(24*3600*1000);
+      if(days<=1)score+=4;
+      else if(days<=3)score+=2;
+      else if(days<=5)score+=1;
+    }
+    if(score>bestScore){bestScore=score;best=race}
+  }
+  return bestScore>=2?best:null;
+}
+function officialLabel(result){
+  const text=String(result?.positionText||'').toUpperCase();
+  const status=String(result?.status||'').toLowerCase();
+  if(status.includes('did not start')||text==='W')return'DNS';
+  if(status.includes('disqual')||text==='D')return'DSQ';
+  if(text==='R')return'DNF';
+  if(status.includes('not classified')||text==='N')return'NC';
+  return'';
+}
+function applyOfficialClassification(rows,info,race){
+  const list=archiveIsSprint(info)?(race?.SprintResults||[]):(race?.Results||[]);
+  if(!Array.isArray(list)||!list.length)return rows;
+  const byNumber=new Map(list.map(r=>[String(r?.number||''),r]));
+  const out=rows.map(row=>{
+    const hit=byNumber.get(String(row.number));
+    if(!hit)return row;
+    const label=officialLabel(hit);
+    return {
+      ...row,
+      classificationLabel:label,
+      officialStatus:hit?.status||'',
+      dnf:label==='DNF'||label==='DNS'||label==='DSQ'
+    };
+  });
+
+  // DNS can be absent from F1 Live Timing entirely. Add any official
+  // classification row that is missing from the timing archive.
+  const existing=new Set(out.map(r=>String(r.number)));
+  for(const hit of list){
+    const num=String(hit?.number||'');
+    if(!num||existing.has(num))continue;
+    const label=officialLabel(hit);
+    if(!label)continue;
+    const driver=hit?.Driver||{},team=hit?.Constructor||{};
+    out.push({
+      number:num,
+      position:Number(hit?.position||999),
+      tla:String(driver?.code||num),
+      name:[driver?.givenName,driver?.familyName].filter(Boolean).join(' '),
+      team:team?.name||'',
+      teamColour:'777777',
+      gap:'',
+      interval:'',
+      lastLap:'',
+      bestLap:'',
+      qualTimes:[],
+      statsGap:'',
+      statsInterval:'',
+      laps:Number(hit?.laps||0)||null,
+      inPit:false,pitOut:false,pitStops:null,retired:label==='DNF',stopped:false,knockOut:false,
+      dnf:label==='DNF'||label==='DNS'||label==='DSQ',
+      classificationLabel:label,
+      officialStatus:hit?.status||'',
+      compound:'',bestLapCompound:'',chequered:false,tyreLaps:null
+    });
+  }
+  return out.sort((a,b)=>a.position-b.position);
+}
+
 async function buildArchiveSession(path,meta=null){
   const topics=['SessionInfo','TimingData','TimingAppData','DriverList','WeatherData','RaceControlMessages','LapCount','TrackStatus','ExtrapolatedClock'];
   const vals=await Promise.all(topics.map(t=>getTopic(path,t).catch(()=>null)));
   const [session,timing,appData,drivers,weather,raceControl,lap,track,clock]=vals;
-  const info=session||{Name:meta?.Name||meta?.Type||'Session',Meeting:meta?.meeting||{}};
+  const info=session||{Name:meta?.Name||meta?.Type||'Session',StartDate:meta?.StartDate,EndDate:meta?.EndDate,Meeting:meta?.meeting||{}};
   const messages=raceControl?.Messages?(Array.isArray(raceControl.Messages)?raceControl.Messages:Object.values(raceControl.Messages)).filter(plain):[];
   const sameCurrent=sessionIdentity(info)&&sessionIdentity(info)===sessionIdentity(state.session);
-  return{version:'0.6.9',source:'archive',live:false,status:'RESULT',connected:state.connected,archivePath:path,lastMessageAt:state.lastMessageAt,lastTimingAt:null,session:info,sessionStatus:'Finalised',clock:clock||{},lap:lap||{},track:track||{},weather:weather||{},drivers:makeRows(drivers||{},timing||{},appData||{},sameCurrent?bestLapTyres:{},sameCurrent?visibleChequeredSet():new Set()),raceControl:messages.slice(-20).reverse()}
+  const kind=archiveSessionKind(info);
+  let archiveRows=makeRows(drivers||{},timing||{},appData||{},sameCurrent?bestLapTyres:{},sameCurrent?visibleChequeredSet():new Set(),kind);
+
+  if(kind==='race'){
+    try{
+      const all=await seasonClassifications();
+      const source=archiveIsSprint(info)?all.sprints:all.races;
+      const race=classificationRaceMatch(info,source);
+      if(race)archiveRows=applyOfficialClassification(archiveRows,info,race);
+    }catch(_){}
+  }
+
+  return{version:'0.7.0',source:'archive',live:false,status:'RESULT',connected:state.connected,archivePath:path,lastMessageAt:state.lastMessageAt,lastTimingAt:null,session:info,sessionStatus:'Finalised',clock:clock||{},lap:lap||{},track:track||{},weather:weather||{},drivers:archiveRows,raceControl:messages.slice(-20).reverse()}
 }
-app.get('/api/live',(req,res)=>{const status=feedStatus();res.json({version:'0.6.9',source:'live',live:status==='LIVE',status,connected:state.connected,lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,session:state.session,sessionStatus:sessionStatusValue(),clock:state.clock,lap:state.lap,track:state.track,weather:state.weather,drivers:rows(),raceControl:state.raceControl.slice(-20).reverse()})});
-app.get('/api/archive/meetings',async(req,res)=>{try{const idx=await seasonIndex();const meetings=(idx?.Meetings||[]).map(m=>({Key:m.Key,Name:m.Name,OfficialName:m.OfficialName,Location:m.Location,Country:m.Country,Circuit:m.Circuit,Sessions:(m.Sessions||[]).filter(s=>safePath(s.Path)).map(s=>({Key:s.Key,Name:s.Name,Type:s.Type,StartDate:s.StartDate,EndDate:s.EndDate,Path:s.Path}))}));res.json({version:'0.6.9',year:YEAR,meetings})}catch(e){res.status(502).json({error:String(e.message||e)})}});
+app.get('/api/live',(req,res)=>{const status=feedStatus();res.json({version:'0.7.0',source:'live',live:status==='LIVE',status,connected:state.connected,lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,session:state.session,sessionStatus:sessionStatusValue(),clock:state.clock,lap:state.lap,track:state.track,weather:state.weather,drivers:rows(),raceControl:state.raceControl.slice(-20).reverse()})});
+app.get('/api/archive/meetings',async(req,res)=>{try{const idx=await seasonIndex();const meetings=(idx?.Meetings||[]).map(m=>({Key:m.Key,Name:m.Name,OfficialName:m.OfficialName,Location:m.Location,Country:m.Country,Circuit:m.Circuit,Sessions:(m.Sessions||[]).filter(s=>safePath(s.Path)).map(s=>({Key:s.Key,Name:s.Name,Type:s.Type,StartDate:s.StartDate,EndDate:s.EndDate,Path:s.Path}))}));res.json({version:'0.7.0',year:YEAR,meetings})}catch(e){res.status(502).json({error:String(e.message||e)})}});
 app.get('/api/archive/latest',async(req,res)=>{try{const sessions=flattenSessions(await seasonIndex());if(!sessions.length)return res.status(404).json({error:'No archived sessions'});const s=sessions[sessions.length-1];res.json(await buildArchiveSession(s.Path,s))}catch(e){res.status(502).json({error:String(e.message||e)})}});
 app.get('/api/archive/session',async(req,res)=>{try{const path=String(req.query.path||'');if(!safePath(path))return res.status(400).json({error:'Invalid path'});res.json(await buildArchiveSession(path))}catch(e){res.status(502).json({error:String(e.message||e)})}});
-app.get('/api/status',(req,res)=>res.json({version:'0.6.9',connected:state.connected,status:feedStatus(),lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,sessionStatus:sessionStatusValue()||null,drivers:rows().length}));
-app.listen(PORT,()=>console.log('Paddock Pulse Live V0.6.9 http://localhost:'+PORT));
+app.get('/api/status',(req,res)=>res.json({version:'0.7.0',connected:state.connected,status:feedStatus(),lastMessageAt:state.lastMessageAt,lastTimingAt:state.lastTimingAt,sessionStatus:sessionStatusValue()||null,drivers:rows().length}));
+app.listen(PORT,()=>console.log('Paddock Pulse Live V0.7.0 http://localhost:'+PORT));

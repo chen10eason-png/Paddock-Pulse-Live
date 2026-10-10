@@ -1,34 +1,43 @@
-# Paddock Pulse Live V0.6.9 — Quali Phase Flags & DNF
+# Paddock Pulse Live V0.7.0 — Historical Classification
 
-## Q1/SQ1 → Q2/SQ2 → Q3/SQ3 方格旗
-- Q1/SQ1 結束：完成最後一圈的車手出現黑白 checker。
-- Q2/SQ2 開始後：有晉級的車手，上一段 checker 會移除。
-- 未晉級車手可保留上一段完成狀態。
-- Q2/SQ2 結束後，晉級車手完成最後一圈再出現 checker。
-- Q3/SQ3 同理。
-- 所有 checker 仍受「官方 Session 結束 + 1 小時」限制。
+## 問題
+V0.6.9 對 Live 的 DNF 判斷已加入 `Retired / Stopped`，
+但歷史 Race / Sprint 仍只靠 F1 Live Timing Archive。
 
-Phase 使用 TimingData 的 BestLapTimes 判斷；晉級名單優先依 KnockedOut，
-必要時用當下 classification cut line fallback（Q2 top 15、Q3 top 10）。
+這不足以完整還原：
+- DNF
+- DNS
+- DSQ
+- NC
 
-## DNF 修正
-之前前端只看 `Retired`，因此部分 `Stopped=true`、`Retired=false` 的正賽車手會漏掉 DNF。
+而且 DNS 車手有時根本不會存在於 Live Timing rows。
 
-V0.6.9：
-- Race / Sprint：`Retired` 或 `Stopped` 都會顯示 DNF。
-- Qualifying 的 `KnockedOut` 不會被誤標為 DNF。
-- FP/Q 一般停車不直接當成 DNF。
+## V0.7.0
 
-## IN PIT 顏色
-`IN PIT` 改用車手所屬車隊顏色，不再固定黃色。
+歷史 Race / Sprint 在 F1 Live Timing Archive 之外，
+再用 Jolpica Ergast-compatible results 做「正式分類補強」。
 
-## 保留
-- Race tyre badge 在 GAP / INTERVAL / IN PIT 旁
-- FP/Q tyre badge 在最快圈時間旁
-- Race 約 3 秒更新
+### 顯示
+- `DNF`：官方 positionText = R
+- `DNS`：官方 status = Did not start，或 positionText = W
+- `DSQ`：官方 Disqualified / positionText = D
+- `NC`：官方 Not classified / positionText = N
+- Finished / +1 Lap / +2 Laps 等正常完賽不標 DNF
+
+### 重要
+- Live Race / Sprint 仍以 F1 Live Timing 為主，不等待 Jolpica。
+- Jolpica 只補 Session 結束 / 歷史結果。
+- 如果 Jolpica 暫時取不到資料，就保留原本 F1 Archive 結果，不猜。
+- 如果 DNS 車手完全不在 Live Timing Archive，會從正式結果補回車手列。
+
+## 其他 V0.6.9 功能保留
+- Q1/SQ1 → Q2/SQ2 → Q3/SQ3 晉級車手清除上一段方格旗
+- 所有 Session 方格旗官方結束後 1 小時隱藏
+- IN PIT 使用車隊顏色
+- Race/Sprint 約 3 秒更新
 - FP/Q 約 5 秒更新
-- 官方 Session 結束 + 1 小時後 checker 隱藏
-- SC / VSC 黃色、Red Flag 紅色
+- Race tyre badge 在 Timing 旁
+- FP/Q tyre badge 在最快圈時間旁
 
 ## 上傳
 覆蓋：
