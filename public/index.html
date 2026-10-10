@@ -33,7 +33,7 @@
 }
 @keyframes flash{0%{background:#252b38}100%{background:#11151d}}@media(max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}.metrics{grid-template-columns:1fr 1fr}.metric.clock{grid-column:1/-1}.driver{grid-template-columns:30px minmax(0,1fr) auto}.right{min-width:96px}.selects{grid-template-columns:1fr}}
 </style></head><body><main class="wrap">
-<div class="top"><div><div class="brand">Paddock Pulse Live</div><div class="sub">Classification Dim Fix · V0.7.1</div></div><div id="status" class="badge">LOADING</div></div>
+<div class="top"><div><div class="brand">Paddock Pulse Live</div><div class="sub">Qualifying Phase Flags · V0.7.2</div></div><div id="status" class="badge">LOADING</div></div>
 <div class="mode"><button id="latestBtn" class="active">最新狀態</button><button id="historyBtn">歷史結果</button></div>
 <div id="historyPanel" class="historyPanel"><div class="selects"><select id="meetingSel"><option>載入賽事…</option></select><select id="sessionSel"><option>選擇 Session</option></select></div></div>
 <section class="hero"><div id="eyebrow" class="eyebrow">LOADING</div><div id="event" class="event">等待資料…</div><div id="meta" class="meta">正在取得最新 session</div><div class="metrics"><div class="metric"><span class="label">LAP</span><b id="lap">—</b></div><div class="metric" id="trackMetric"><span class="label">TRACK</span><b id="track">—</b></div><div class="metric clock"><span class="label">SESSION CLOCK</span><b id="clock">—</b></div></div><div class="grid"><div class="tiny"><span class="label">AIR</span><b id="air">—</b></div><div class="tiny"><span class="label">TRACK TEMP</span><b id="ttrack">—</b></div><div class="tiny"><span class="label">HUMIDITY</span><b id="hum">—</b></div><div class="tiny"><span class="label">WIND</span><b id="wind">—</b></div></div></section>
@@ -41,7 +41,7 @@
 <section class="section"><div class="sectionHead"><h2>Race Control</h2></div><div id="rc" class="rc"><div class="empty">目前沒有訊息</div></div></section><div id="updated" class="footer">—</div></main>
 <script>
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-let latest=null,gapMode='gap',meetings=[],pollTimer=null,requestInFlight=false,requestSeq=0,clockAnchor=null,lastClockRaw=null,lastClockSessionKey=null,lastBestByDriver=new Map(),lastQualPhase=1;
+let latest=null,gapMode='gap',meetings=[],pollTimer=null,requestInFlight=false,requestSeq=0,clockAnchor=null,lastClockRaw=null,lastClockSessionKey=null,lastBestByDriver=new Map(),lastQualPhase=1,lastQualSessionKey='';
 
 const LIVE_POLL_MS=5000;
 const RACE_POLL_MS=3000;
@@ -199,8 +199,21 @@ function tickClock(){
 }
 function qualifyingPhase(d){
   if(sessionKind(d)!=='qualifying')return null;
+  const key=sessionKey(d);
+  if(key!==lastQualSessionKey){
+    lastQualSessionKey=key;
+    lastQualPhase=1;
+  }
+  const explicit=Number(d.qualifyingStage);
+  if(Number.isFinite(explicit)&&explicit>=1&&explicit<=3){
+    lastQualPhase=explicit;
+    return lastQualPhase;
+  }
   let max=0;
-  for(const x of d.drivers||[])max=Math.max(max,Array.isArray(x.qualTimes)?x.qualTimes.length:0);
+  for(const x of d.drivers||[]){
+    const q=Array.isArray(x.qualTimes)?x.qualTimes.filter(Boolean):[];
+    max=Math.max(max,q.length);
+  }
   if(max>0)lastQualPhase=Math.max(1,Math.min(3,max));
   return lastQualPhase;
 }
